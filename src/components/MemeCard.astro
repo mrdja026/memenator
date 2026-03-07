@@ -1,0 +1,222 @@
+---
+import TagPill from './TagPill.astro';
+
+interface Props {
+  id: string;
+  title: string;
+  description: string | null;
+  filePath: string;
+  fileUrl: string;
+  fileType: string;
+  tags: Array<{ id: string; name: string }>;
+  activeTag?: string;
+}
+
+const { id, title, description, fileUrl, fileType, tags, activeTag } = Astro.props;
+---
+
+<article class="meme-card" data-meme-id={id} id={`meme-${id}`}>
+  <div class="media-container">
+    {fileType === 'video' ? (
+      <video 
+        src={fileUrl} 
+        controls 
+        playsinline 
+        preload="metadata"
+        class="media"
+      >
+        Your browser does not support video playback.
+      </video>
+    ) : (
+      <img 
+        src={fileUrl} 
+        alt={title} 
+        loading="lazy" 
+        class="media"
+        onerror="this.style.display='none'"
+      />
+    )}
+  </div>
+
+  <div class="content">
+    <div class="header">
+      <h2 class="title">{title}</h2>
+      <button 
+        type="button" 
+        class="delete-btn" 
+        data-meme-id={id}
+        aria-label="Delete meme"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/>
+          <line x1="10" y1="11" x2="10" y2="17"/>
+          <line x1="14" y1="11" x2="14" y2="17"/>
+        </svg>
+      </button>
+    </div>
+
+    {description && (
+      <p class="description">{description}</p>
+    )}
+
+    {tags.length > 0 && (
+      <div class="tags">
+        {tags.map((tag) => (
+          <TagPill name={tag.name} active={tag.name === activeTag} />
+        ))}
+      </div>
+    )}
+  </div>
+</article>
+
+<script>
+  function initMemeCards() {
+    document.querySelectorAll('.delete-btn').forEach((btn) => {
+      // Prevent duplicate handlers
+      if ((btn as any)._initialized) return;
+      (btn as any)._initialized = true;
+
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const memeId = btn.getAttribute('data-meme-id');
+        if (!memeId) return;
+
+        const confirmed = confirm('Are you sure you want to delete this meme?');
+        if (!confirmed) return;
+
+        try {
+          const response = await fetch(`/api/memes/${memeId}`, {
+            method: 'DELETE',
+          });
+
+          if (!response.ok) {
+            throw new Error('Delete failed');
+          }
+
+          // Remove from DOM and reload
+          const card = btn.closest('.meme-card');
+          card?.remove();
+          
+          // If no memes left, reload to show empty state
+          if (document.querySelectorAll('.meme-card').length === 0) {
+            window.location.reload();
+          }
+        } catch (error) {
+          alert('Failed to delete meme');
+        }
+      });
+    });
+
+    // Lazy load videos with Intersection Observer
+    const videos = document.querySelectorAll('video[preload="metadata"]');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          const video = entry.target as HTMLVideoElement;
+          video.preload = 'auto';
+          observer.unobserve(video);
+        }
+      });
+    }, { rootMargin: '100px' });
+
+    videos.forEach((video) => observer.observe(video));
+  }
+
+  // Run on initial load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initMemeCards);
+  } else {
+    initMemeCards();
+  }
+  
+  // Run on view transitions
+  document.addEventListener('astro:page-load', initMemeCards);
+</script>
+
+<style>
+  .meme-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    transition: border-color 0.15s ease;
+  }
+
+  .meme-card:hover {
+    border-color: var(--color-accent);
+  }
+
+  .media-container {
+    background: var(--color-bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 200px;
+  }
+
+  .media {
+    width: 100%;
+    height: auto;
+    max-height: 500px;
+    object-fit: contain;
+    display: block;
+  }
+
+  .content {
+    padding: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--spacing-md);
+  }
+
+  .title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    line-height: 1.3;
+    margin: 0;
+  }
+
+  .delete-btn {
+    flex-shrink: 0;
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .delete-btn:hover {
+    background: var(--color-error);
+    border-color: var(--color-error);
+    color: white;
+  }
+
+  .description {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    line-height: 1.5;
+    margin: 0;
+  }
+
+  .tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    margin-top: var(--spacing-xs);
+  }
+</style>

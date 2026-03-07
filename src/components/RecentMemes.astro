@@ -1,0 +1,113 @@
+---
+import type { MemeWithTags } from '@/lib/db';
+
+interface Props {
+  memes: MemeWithTags[];
+}
+
+const { memes } = Astro.props;
+---
+
+{memes.length > 0 && (
+  <div class="recent-memes">
+    <h3 class="section-title">Recent</h3>
+    <div class="thumbnails">
+      {memes.map((meme) => (
+        <a href={`#meme-${meme.id}`} class="thumbnail" title={meme.title}>
+          {meme.fileType === 'video' ? (
+            <video src={meme.filePath} muted preload="metadata" class="thumb-media">
+              <source src={meme.filePath} type="video/mp4" />
+            </video>
+          ) : (
+            <img src={meme.filePath} alt={meme.title} loading="lazy" class="thumb-media" />
+          )}
+        </a>
+      ))}
+    </div>
+  </div>
+)}
+
+<script>
+  function initRecentMemes() {
+    document.querySelectorAll('.thumbnail').forEach((thumb) => {
+      // Prevent duplicate handlers
+      if ((thumb as any)._initialized) return;
+      (thumb as any)._initialized = true;
+
+      thumb.addEventListener('click', (e) => {
+        e.preventDefault();
+        const href = thumb.getAttribute('href');
+        if (!href) return;
+
+        const target = document.querySelector(href);
+        if (target) {
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          target.classList.add('highlight');
+          setTimeout(() => target.classList.remove('highlight'), 1000);
+        }
+      });
+    });
+  }
+
+  // Run on initial load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initRecentMemes);
+  } else {
+    initRecentMemes();
+  }
+  
+  // Run on view transitions
+  document.addEventListener('astro:page-load', initRecentMemes);
+</script>
+
+<style>
+  .recent-memes {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .section-title {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    margin: 0;
+  }
+
+  .thumbnails {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--spacing-xs);
+  }
+
+  .thumbnail {
+    aspect-ratio: 1;
+    border-radius: var(--radius-sm);
+    overflow: hidden;
+    background: var(--color-bg);
+    border: 2px solid transparent;
+    transition: border-color 0.15s ease;
+  }
+
+  .thumbnail:hover {
+    border-color: var(--color-accent);
+  }
+
+  .thumb-media {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+  }
+
+  :global(.meme-card.highlight) {
+    animation: pulse 0.5s ease 2;
+  }
+
+  @keyframes pulse {
+    0%, 100% { border-color: var(--color-accent); }
+    50% { border-color: var(--color-accent-hover); box-shadow: 0 0 20px rgba(99, 102, 241, 0.3); }
+  }
+</style>

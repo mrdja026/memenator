@@ -1,0 +1,36 @@
+---
+import UploadForm from './UploadForm.astro';
+import RecentMemes from './RecentMemes.astro';
+import { getRecentMemes } from '@/lib/db';
+
+const recentMemes = await getRecentMemes(9);
+---
+
+<div class="sidebar-content">
+  <div class="logo">
+    <h1>Memenator</h1>
+  </div>
+
+  <UploadForm />
+
+  <RecentMemes memes={recentMemes} />
+</div>
+
+<style>
+  .sidebar-content {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-lg);
+    height: 100%;
+  }
+
+  .logo h1 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin: 0;
+    background: linear-gradient(135deg, var(--color-accent), var(--color-accent-hover));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+</style>

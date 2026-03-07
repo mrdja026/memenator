@@ -1,0 +1,81 @@
+---
+interface Props {
+  name: string;
+  removable?: boolean;
+  clickable?: boolean;
+  active?: boolean;
+}
+
+const { name, removable = false, clickable = true, active = false } = Astro.props;
+const href = clickable ? `/?tag=${encodeURIComponent(name)}` : undefined;
+---
+
+{clickable ? (
+  <a href={href} class:list={['tag-pill', { active }]} data-tag={name}>
+    {name}
+  </a>
+) : (
+  <span class:list={['tag-pill', { removable }]} data-tag={name}>
+    {name}
+    {removable && (
+      <button type="button" class="remove-btn" aria-label={`Remove ${name}`}>
+        <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="2" y1="2" x2="10" y2="10" />
+          <line x1="10" y1="2" x2="2" y2="10" />
+        </svg>
+      </button>
+    )}
+  </span>
+)}
+
+<style>
+  .tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    color: var(--color-text);
+    text-decoration: none;
+    transition: all 0.15s ease;
+  }
+
+  a.tag-pill:hover {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: white;
+  }
+
+  .tag-pill.active {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: white;
+  }
+
+  .tag-pill.removable {
+    padding-right: var(--spacing-xs);
+  }
+
+  .remove-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-full);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .remove-btn:hover {
+    background: var(--color-error);
+    color: white;
+  }
+</style>

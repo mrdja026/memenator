@@ -1,0 +1,100 @@
+---
+import MemeCard from './MemeCard.astro';
+import type { MemeWithTags } from '@/lib/db';
+
+interface Props {
+  memes: MemeWithTags[];
+  activeTag?: string;
+}
+
+const { memes, activeTag } = Astro.props;
+---
+
+{memes.length === 0 ? (
+  <div class="empty-state">
+    {activeTag ? (
+      <>
+        <div class="empty-icon">🔍</div>
+        <h2 class="empty-title">No memes found</h2>
+        <p class="empty-text">No memes with tag "{activeTag}"</p>
+        <a href="/" class="clear-filter">Clear filter</a>
+      </>
+    ) : (
+      <>
+        <div class="empty-icon">📁</div>
+        <h2 class="empty-title">No memes yet</h2>
+        <p class="empty-text">Upload your first meme using the form in the sidebar</p>
+      </>
+    )}
+  </div>
+) : (
+  <div class="gallery">
+    {memes.map((meme) => (
+      <MemeCard
+        id={meme.id}
+        title={meme.title}
+        description={meme.description}
+        filePath={meme.filePath}
+        fileUrl={meme.fileUrl}
+        fileType={meme.fileType}
+        tags={meme.tags}
+        activeTag={activeTag}
+      />
+    ))}
+  </div>
+)}
+
+<style>
+  .gallery {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(350px, 1fr));
+    gap: var(--spacing-xl);
+  }
+
+  .empty-state {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: var(--spacing-xl);
+    min-height: 400px;
+  }
+
+  .empty-icon {
+    font-size: 4rem;
+    margin-bottom: var(--spacing-md);
+  }
+
+  .empty-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 var(--spacing-sm);
+  }
+
+  .empty-text {
+    color: var(--color-text-muted);
+    margin: 0 0 var(--spacing-lg);
+  }
+
+  .clear-filter {
+    background: var(--color-accent);
+    color: white;
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    font-weight: 500;
+    text-decoration: none;
+    transition: background 0.15s ease;
+  }
+
+  .clear-filter:hover {
+    background: var(--color-accent-hover);
+    color: white;
+  }
+
+  @media (max-width: 768px) {
+    .gallery {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

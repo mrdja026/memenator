@@ -1,0 +1,60 @@
+services:
+  db:
+    image: ghcr.io/tursodatabase/libsql-server:latest
+    container_name: memenator-db
+    ports:
+      - "${LIBSQL_PORT:-8080}:8080"
+    environment:
+      - SQLD_NODE=primary
+    volumes:
+      - memenator-db-data:/var/lib/sqld
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/8080'"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:latest
+    container_name: memenator-minio
+    ports:
+      - "${MINIO_API_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PORT:-9001}:9001"
+    environment:
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin}
+    volumes:
+      - memenator-minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: unless-stopped
+
+  app:
+    build: .
+    container_name: memenator-app
+    ports:
+      - "${APP_PORT:-4321}:4321"
+    environment:
+      - ASTRO_DB_REMOTE_URL=http://db:8080
+      - ASTRO_DB_APP_TOKEN=${ASTRO_DB_APP_TOKEN:-}
+      - MINIO_ENDPOINT=http://minio:9000
+      - MINIO_ACCESS_KEY=${MINIO_ACCESS_KEY:-minioadmin}
+      - MINIO_SECRET_KEY=${MINIO_SECRET_KEY:-minioadmin}
+      - MINIO_BUCKET=${MINIO_BUCKET:-memenator-media}
+    depends_on:
+      db:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+
+volumes:
+  memenator-db-data:
+  memenator-minio-data:

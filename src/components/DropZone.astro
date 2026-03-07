@@ -1,0 +1,293 @@
+---
+
+---
+
+<div class="dropzone" id="dropzone">
+  <input 
+    type="file" 
+    id="file-input" 
+    accept="image/png,image/jpeg,image/jpg,image/gif,video/mp4"
+    hidden
+  />
+  
+  <div class="dropzone-content">
+    <svg class="upload-icon" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+      <path d="M12 15V3m0 0l-4 4m4-4l4 4" />
+      <path d="M2 17l.621 2.485A2 2 0 0 0 4.561 21h14.878a2 2 0 0 0 1.94-1.515L22 17" />
+    </svg>
+    <p class="dropzone-text">Drop files here, paste from clipboard, or</p>
+    <button type="button" class="browse-btn" id="browse-btn">Browse files</button>
+    <p class="dropzone-hint">PNG, JPG, GIF, MP4 (max 50MB)</p>
+  </div>
+
+  <div class="preview-container" id="preview-container" hidden>
+    <div class="preview-media" id="preview-media"></div>
+    <button type="button" class="clear-btn" id="clear-btn" aria-label="Clear selection">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <line x1="4" y1="4" x2="20" y2="20" />
+        <line x1="20" y1="4" x2="4" y2="20" />
+      </svg>
+    </button>
+  </div>
+</div>
+
+<script>
+  function initDropZone() {
+    const dropzone = document.getElementById('dropzone');
+    const fileInput = document.getElementById('file-input') as HTMLInputElement | null;
+    const browseBtn = document.getElementById('browse-btn');
+    const clearBtn = document.getElementById('clear-btn');
+    const previewContainer = document.getElementById('preview-container');
+    const previewMedia = document.getElementById('preview-media');
+    
+    if (!dropzone || !fileInput || !browseBtn || !clearBtn || !previewContainer || !previewMedia) {
+      return;
+    }
+
+    const dropzoneContent = dropzone.querySelector('.dropzone-content') as HTMLDivElement;
+    if (!dropzoneContent) return;
+
+    // Prevent duplicate initialization
+    if ((dropzone as any)._initialized) return;
+    (dropzone as any)._initialized = true;
+
+    let currentFile: File | null = null;
+
+    const allowedTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/gif', 'video/mp4'];
+    const maxSize = 50 * 1024 * 1024;
+
+    function validateFile(file: File): string | null {
+      if (!allowedTypes.includes(file.type)) {
+        return 'Invalid file type. Allowed: PNG, JPG, GIF, MP4';
+      }
+      if (file.size > maxSize) {
+        return 'File too large. Maximum size: 50MB';
+      }
+      return null;
+    }
+
+    function showPreview(file: File) {
+      currentFile = file;
+      dropzoneContent.hidden = true;
+      previewContainer.hidden = false;
+
+      previewMedia.innerHTML = '';
+      
+      const isVideo = file.type.startsWith('video/');
+      const url = URL.createObjectURL(file);
+
+      if (isVideo) {
+        const video = document.createElement('video');
+        video.src = url;
+        video.controls = true;
+        video.className = 'preview-element';
+        previewMedia.appendChild(video);
+      } else {
+        const img = document.createElement('img');
+        img.src = url;
+        img.className = 'preview-element';
+        img.alt = 'Preview';
+        previewMedia.appendChild(img);
+      }
+
+      dropzone.dispatchEvent(new CustomEvent('fileselected', { 
+        detail: { file },
+        bubbles: true 
+      }));
+    }
+
+    function clearPreview() {
+      currentFile = null;
+      previewContainer.hidden = true;
+      dropzoneContent.hidden = false;
+      previewMedia.innerHTML = '';
+      fileInput.value = '';
+
+      dropzone.dispatchEvent(new CustomEvent('filecleared', { bubbles: true }));
+    }
+
+    function handleFiles(files: FileList | null) {
+      if (!files || files.length === 0) return;
+      
+      const file = files[0];
+      const error = validateFile(file);
+      
+      if (error) {
+        alert(error);
+        return;
+      }
+
+      showPreview(file);
+    }
+
+    // Browse button click
+    browseBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      fileInput.click();
+    });
+    
+    // File input change
+    fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+    
+    // Clear button
+    clearBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      clearPreview();
+    });
+
+    // Prevent browser default drag behavior on entire document
+    document.addEventListener('dragover', (e) => {
+      e.preventDefault();
+    });
+    
+    document.addEventListener('drop', (e) => {
+      e.preventDefault();
+    });
+
+    // Drag and drop on dropzone
+    dropzone.addEventListener('dragenter', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('drag-over');
+    });
+
+    dropzone.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.add('drag-over');
+    });
+
+    dropzone.addEventListener('dragleave', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('drag-over');
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dropzone.classList.remove('drag-over');
+      handleFiles(e.dataTransfer?.files ?? null);
+    });
+
+    // Clipboard paste
+    document.addEventListener('paste', (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+
+      for (const item of items) {
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file && allowedTypes.includes(file.type)) {
+            e.preventDefault();
+            const dt = new DataTransfer();
+            dt.items.add(file);
+            handleFiles(dt.files);
+            break;
+          }
+        }
+      }
+    });
+
+    // Expose methods
+    (dropzone as any).getCurrentFile = () => currentFile;
+    (dropzone as any).clearPreview = clearPreview;
+  }
+
+  // Run on initial load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initDropZone);
+  } else {
+    initDropZone();
+  }
+  
+  // Run on view transitions
+  document.addEventListener('astro:page-load', initDropZone);
+</script>
+
+<style>
+  .dropzone {
+    border: 2px dashed var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--spacing-lg);
+    text-align: center;
+    transition: all 0.2s ease;
+    background: var(--color-bg);
+    position: relative;
+  }
+
+  .dropzone.drag-over {
+    border-color: var(--color-accent);
+    background: rgba(99, 102, 241, 0.1);
+  }
+
+  .dropzone-content {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--spacing-sm);
+  }
+
+  .upload-icon {
+    color: var(--color-text-muted);
+  }
+
+  .dropzone-text {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+  }
+
+  .dropzone-hint {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+  }
+
+  .browse-btn {
+    background: var(--color-accent);
+    color: white;
+    border: none;
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    transition: background 0.15s ease;
+  }
+
+  .browse-btn:hover {
+    background: var(--color-accent-hover);
+  }
+
+  .preview-container {
+    position: relative;
+  }
+
+  .preview-media :global(.preview-element) {
+    width: 100%;
+    max-height: 200px;
+    object-fit: contain;
+    border-radius: var(--radius-md);
+  }
+
+  .clear-btn {
+    position: absolute;
+    top: var(--spacing-sm);
+    right: var(--spacing-sm);
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.7);
+    border: none;
+    border-radius: var(--radius-full);
+    color: white;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .clear-btn:hover {
+    background: var(--color-error);
+  }
+</style>

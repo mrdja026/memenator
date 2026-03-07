@@ -1,0 +1,290 @@
+---
+import DropZone from './DropZone.astro';
+import TagInput from './TagInput.astro';
+import { getAllTags } from '@/lib/db';
+
+const tags = await getAllTags();
+---
+
+<form class="upload-form" id="upload-form" data-astro-transition-persist="upload-form">
+  <DropZone />
+  
+  <div class="form-fields" id="form-fields" hidden>
+    <div class="field">
+      <label for="title-input" class="label">Title *</label>
+      <input 
+        type="text" 
+        id="title-input" 
+        class="input" 
+        placeholder="Give your meme a title"
+        required
+      />
+    </div>
+
+    <div class="field">
+      <label for="description-input" class="label">Description</label>
+      <textarea 
+        id="description-input" 
+        class="input textarea" 
+        placeholder="Optional description..."
+        rows="2"
+      ></textarea>
+    </div>
+
+    <div class="field">
+      <label class="label">Tags</label>
+      <TagInput existingTags={tags} />
+    </div>
+
+    <div class="actions">
+      <button type="button" class="btn btn-secondary" id="cancel-btn">Cancel</button>
+      <button type="submit" class="btn btn-primary" id="submit-btn">
+        <span class="btn-text">Upload</span>
+        <span class="btn-loading" hidden>Uploading...</span>
+      </button>
+    </div>
+  </div>
+
+  <div class="error-message" id="error-message" hidden></div>
+</form>
+
+<script>
+  function initUploadForm() {
+    const form = document.getElementById('upload-form') as HTMLFormElement | null;
+    const formFields = document.getElementById('form-fields');
+    const dropzone = document.getElementById('dropzone');
+    const titleInput = document.getElementById('title-input') as HTMLInputElement | null;
+    const descriptionInput = document.getElementById('description-input') as HTMLTextAreaElement | null;
+    const tagInputWrapper = document.getElementById('tag-input-wrapper');
+    const cancelBtn = document.getElementById('cancel-btn');
+    const submitBtn = document.getElementById('submit-btn');
+    const errorMessage = document.getElementById('error-message');
+
+    if (!form || !formFields || !dropzone || !titleInput || !descriptionInput || !tagInputWrapper || !cancelBtn || !submitBtn || !errorMessage) {
+      return;
+    }
+
+    const btnText = submitBtn.querySelector('.btn-text') as HTMLSpanElement | null;
+    const btnLoading = submitBtn.querySelector('.btn-loading') as HTMLSpanElement | null;
+
+    if (!btnText || !btnLoading) return;
+
+    // Prevent duplicate initialization
+    if ((form as any)._initialized) return;
+    (form as any)._initialized = true;
+
+    let currentFile: File | null = null;
+
+    function showFormFields() {
+      formFields.hidden = false;
+      titleInput.focus();
+    }
+
+    function hideFormFields() {
+      formFields.hidden = true;
+      titleInput.value = '';
+      descriptionInput.value = '';
+      (tagInputWrapper as any).clearTags?.();
+      currentFile = null;
+    }
+
+    function showError(message: string) {
+      errorMessage.textContent = message;
+      errorMessage.hidden = false;
+    }
+
+    function hideError() {
+      errorMessage.hidden = true;
+    }
+
+    function setLoading(loading: boolean) {
+      (submitBtn as HTMLButtonElement).disabled = loading;
+      (cancelBtn as HTMLButtonElement).disabled = loading;
+      btnText.hidden = loading;
+      btnLoading.hidden = !loading;
+    }
+
+    // File selected
+    dropzone.addEventListener('fileselected', (e: Event) => {
+      const detail = (e as CustomEvent).detail;
+      currentFile = detail.file;
+      showFormFields();
+      hideError();
+    });
+
+    // File cleared
+    dropzone.addEventListener('filecleared', () => {
+      hideFormFields();
+      hideError();
+    });
+
+    // Cancel button
+    cancelBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      (dropzone as any).clearPreview?.();
+      hideFormFields();
+      hideError();
+    });
+
+    // Form submit
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      hideError();
+
+      if (!currentFile) {
+        showError('Please select a file');
+        return;
+      }
+
+      const title = titleInput.value.trim();
+      if (!title) {
+        showError('Title is required');
+        titleInput.focus();
+        return;
+      }
+
+      const tags = (tagInputWrapper as any).getTags?.() || [];
+
+      setLoading(true);
+
+      try {
+        const formData = new FormData();
+        formData.append('file', currentFile);
+        formData.append('title', title);
+        formData.append('description', descriptionInput.value.trim());
+        formData.append('tags', JSON.stringify(tags));
+
+        const response = await fetch('/api/upload', {
+          method: 'POST',
+          body: formData,
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Upload failed');
+        }
+
+        // Success - reset form and reload page
+        (dropzone as any).clearPreview?.();
+        hideFormFields();
+        window.location.reload();
+      } catch (error) {
+        showError(error instanceof Error ? error.message : 'Upload failed');
+      } finally {
+        setLoading(false);
+      }
+    });
+  }
+
+  // Run on initial load
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initUploadForm);
+  } else {
+    initUploadForm();
+  }
+  
+  // Run on view transitions
+  document.addEventListener('astro:page-load', initUploadForm);
+</script>
+
+<style>
+  .upload-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .form-fields {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .label {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .input {
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-sm) var(--spacing-md);
+    color: var(--color-text);
+    font-size: 0.875rem;
+    transition: border-color 0.15s ease;
+  }
+
+  .input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+  }
+
+  .input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .textarea {
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  .actions {
+    display: flex;
+    gap: var(--spacing-sm);
+    justify-content: flex-end;
+  }
+
+  .btn {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    border: none;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  .btn-primary {
+    background: var(--color-accent);
+    color: white;
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: var(--color-accent-hover);
+  }
+
+  .btn-secondary {
+    background: var(--color-surface);
+    color: var(--color-text);
+    border: 1px solid var(--color-border);
+  }
+
+  .btn-secondary:hover:not(:disabled) {
+    background: var(--color-surface-hover);
+  }
+
+  .error-message {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid var(--color-error);
+    color: var(--color-error);
+    padding: var(--spacing-sm) var(--spacing-md);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+  }
+</style>

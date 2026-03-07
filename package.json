@@ -1,0 +1,26 @@
+{
+  "name": "memenator",
+  "type": "module",
+  "version": "0.0.1",
+  "scripts": {
+    "dev": "astro dev",
+    "dev:remote": "astro dev --remote",
+    "build": "astro build --remote",
+    "preview": "astro preview",
+    "astro": "astro",
+    "db:start": "docker compose up db -d",
+    "db:stop": "docker compose down",
+    "db:push": "astro db push --remote"
+  },
+  "dependencies": {
+    "@astrojs/db": "^0.14.0",
+    "@astrojs/node": "^9.5.4",
+    "@aws-sdk/client-s3": "^3.1003.0",
+    "@aws-sdk/s3-request-presigner": "^3.1003.0",
+    "astro": "^5.0.0"
+  },
+  "devDependencies": {
+    "@astrojs/check": "^0.9.6",
+    "typescript": "^5.9.3"
+  }
+}
