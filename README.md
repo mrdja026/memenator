@@ -1,5 +1,8 @@
 # Memenator
 
+A local depoloyed container with minio that can store memes with minimal search.
+Copy paste coming soon, or share may be cute.
+
 A meme gallery built with Astro, libSQL database, and MinIO object storage.
 
 ## Architecture
