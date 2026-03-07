@@ -25,6 +25,34 @@ export async function getAllMemes(): Promise<MemeWithTags[]> {
   return Promise.all(memes.map(addTagsToMeme));
 }
 
+export async function searchMemes(query: string): Promise<MemeWithTags[]> {
+  const memes = await db.select().from(Meme).orderBy(desc(Meme.createdAt));
+  const searchTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  
+  const filteredMemes = memes.filter((meme) => {
+    const title = meme.title.toLowerCase();
+    const description = (meme.description ?? '').toLowerCase();
+    const searchText = `${title} ${description}`;
+    
+    return searchTerms.every((term) => searchText.includes(term));
+  });
+  
+  return Promise.all(filteredMemes.map(addTagsToMeme));
+}
+
+export async function searchMemesByTags(query: string, tagNames: string[]): Promise<MemeWithTags[]> {
+  const tagMemes = await getMemesByTags(tagNames);
+  const searchTerms = query.toLowerCase().split(/\s+/).filter(Boolean);
+  
+  return tagMemes.filter((meme) => {
+    const title = meme.title.toLowerCase();
+    const description = (meme.description ?? '').toLowerCase();
+    const searchText = `${title} ${description}`;
+    
+    return searchTerms.every((term) => searchText.includes(term));
+  });
+}
+
 export async function getRecentMemes(limit: number = 10): Promise<MemeWithTags[]> {
   const memes = await db
     .select()
@@ -35,20 +63,22 @@ export async function getRecentMemes(limit: number = 10): Promise<MemeWithTags[]
 }
 
 export async function getMemesByTag(tagName: string): Promise<MemeWithTags[]> {
-  const tag = await db
-    .select()
-    .from(Tag)
-    .where(eq(Tag.name, tagName))
-    .limit(1);
+  return getMemesByTags([tagName]);
+}
 
-  if (tag.length === 0) return [];
+export async function getMemesByTags(tagNames: string[]): Promise<MemeWithTags[]> {
+  if (tagNames.length === 0) return getAllMemes();
 
-  const memeTags = await db
-    .select()
-    .from(MemeTag)
-    .where(eq(MemeTag.tagId, tag[0].id));
+  const allTags = await db.select().from(Tag);
+  const matchingTags = allTags.filter((t) => tagNames.includes(t.name));
+  
+  if (matchingTags.length === 0) return [];
 
-  const memeIds = memeTags.map((mt) => mt.memeId);
+  const tagIds = matchingTags.map((t) => t.id);
+  const allMemeTags = await db.select().from(MemeTag);
+  const matchingMemeTags = allMemeTags.filter((mt) => tagIds.includes(mt.tagId));
+
+  const memeIds = [...new Set(matchingMemeTags.map((mt) => mt.memeId))];
   if (memeIds.length === 0) return [];
 
   const memes = await db.select().from(Meme).orderBy(desc(Meme.createdAt));

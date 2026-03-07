@@ -4,20 +4,36 @@ import type { MemeWithTags } from '@/lib/db';
 
 interface Props {
   memes: MemeWithTags[];
-  activeTag?: string;
+  activeTags?: string[];
+  searchQuery?: string;
 }
 
-const { memes, activeTag } = Astro.props;
+const { memes, activeTags = [], searchQuery } = Astro.props;
+const hasTagFilters = activeTags.length > 0;
 ---
 
 {memes.length === 0 ? (
-  <div class="empty-state">
-    {activeTag ? (
+  <div class="empty-state" transition:animate="fade">
+    {searchQuery && hasTagFilters ? (
       <>
         <div class="empty-icon">🔍</div>
         <h2 class="empty-title">No memes found</h2>
-        <p class="empty-text">No memes with tag "{activeTag}"</p>
-        <a href="/" class="clear-filter">Clear filter</a>
+        <p class="empty-text">No memes matching "{searchQuery}" with tags: {activeTags.join(', ')}</p>
+        <a href="/" class="clear-filter">Clear all filters</a>
+      </>
+    ) : searchQuery ? (
+      <>
+        <div class="empty-icon">🔍</div>
+        <h2 class="empty-title">No memes found</h2>
+        <p class="empty-text">No memes matching "{searchQuery}"</p>
+        <a href="/" class="clear-filter">Clear search</a>
+      </>
+    ) : hasTagFilters ? (
+      <>
+        <div class="empty-icon">🔍</div>
+        <h2 class="empty-title">No memes found</h2>
+        <p class="empty-text">No memes with tags: {activeTags.join(', ')}</p>
+        <a href="/" class="clear-filter">Clear filters</a>
       </>
     ) : (
       <>
@@ -28,7 +44,7 @@ const { memes, activeTag } = Astro.props;
     )}
   </div>
 ) : (
-  <div class="gallery">
+  <div class="gallery" transition:animate="fade">
     {memes.map((meme) => (
       <MemeCard
         id={meme.id}
@@ -38,7 +54,7 @@ const { memes, activeTag } = Astro.props;
         fileUrl={meme.fileUrl}
         fileType={meme.fileType}
         tags={meme.tags}
-        activeTag={activeTag}
+        activeTags={activeTags}
       />
     ))}
   </div>

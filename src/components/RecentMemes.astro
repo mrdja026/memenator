@@ -15,11 +15,11 @@ const { memes } = Astro.props;
       {memes.map((meme) => (
         <a href={`#meme-${meme.id}`} class="thumbnail" title={meme.title}>
           {meme.fileType === 'video' ? (
-            <video src={meme.filePath} muted preload="metadata" class="thumb-media">
-              <source src={meme.filePath} type="video/mp4" />
+            <video src={meme.fileUrl} muted preload="metadata" class="thumb-media">
+              <source src={meme.fileUrl} type="video/mp4" />
             </video>
           ) : (
-            <img src={meme.filePath} alt={meme.title} loading="lazy" class="thumb-media" />
+            <img src={meme.fileUrl} alt={meme.title} loading="lazy" class="thumb-media" />
           )}
         </a>
       ))}

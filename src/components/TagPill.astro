@@ -4,10 +4,25 @@ interface Props {
   removable?: boolean;
   clickable?: boolean;
   active?: boolean;
+  currentTags?: string[];
 }
 
-const { name, removable = false, clickable = true, active = false } = Astro.props;
-const href = clickable ? `/?tag=${encodeURIComponent(name)}` : undefined;
+const { name, removable = false, clickable = true, active = false, currentTags = [] } = Astro.props;
+
+let href: string | undefined;
+if (clickable) {
+  const url = new URL(Astro.url);
+  const existingTags = url.searchParams.getAll('tag');
+  url.searchParams.delete('tag');
+  
+  if (existingTags.includes(name)) {
+    existingTags.filter((t) => t !== name).forEach((t) => url.searchParams.append('tag', t));
+  } else {
+    [...existingTags, name].forEach((t) => url.searchParams.append('tag', t));
+  }
+  
+  href = url.pathname + url.search;
+}
 ---
 
 {clickable ? (

@@ -2,24 +2,95 @@
 import Layout from '@/layouts/Layout.astro';
 import Sidebar from '@/components/Sidebar.astro';
 import Gallery from '@/components/Gallery.astro';
-import { getAllMemes, getMemesByTag } from '@/lib/db';
+import { getAllMemes, getMemesByTags, searchMemes, searchMemesByTags } from '@/lib/db';
 
-const tagFilter = Astro.url.searchParams.get('tag');
+const tagFilters = Astro.url.searchParams.getAll('tag');
+const searchQuery = Astro.url.searchParams.get('q');
 
-const memes = tagFilter 
-  ? await getMemesByTag(tagFilter)
-  : await getAllMemes();
+let memes;
+if (searchQuery && tagFilters.length > 0) {
+  memes = await searchMemesByTags(searchQuery, tagFilters);
+} else if (searchQuery) {
+  memes = await searchMemes(searchQuery);
+} else if (tagFilters.length > 0) {
+  memes = await getMemesByTags(tagFilters);
+} else {
+  memes = await getAllMemes();
+}
+
+const buildUrl = (params: { q?: string | null; tags?: string[] | null; removeTag?: string }) => {
+  const url = new URL(Astro.url);
+  if (params.q !== undefined) {
+    if (params.q) url.searchParams.set('q', params.q);
+    else url.searchParams.delete('q');
+  }
+  if (params.tags !== undefined) {
+    url.searchParams.delete('tag');
+    if (params.tags) {
+      params.tags.forEach((tag) => url.searchParams.append('tag', tag));
+    }
+  }
+  if (params.removeTag) {
+    const currentTags = url.searchParams.getAll('tag');
+    url.searchParams.delete('tag');
+    currentTags.filter((t) => t !== params.removeTag).forEach((t) => url.searchParams.append('tag', t));
+  }
+  return url.pathname + url.search;
+};
 ---
 
-<Layout title={tagFilter ? `${tagFilter} - Memenator` : 'Memenator'}>
+<Layout title={tagFilters.length > 0 ? `${tagFilters.join(', ')} - Memenator` : 'Memenator'}>
   <Sidebar slot="sidebar" />
 
   <div class="page-header">
-    {tagFilter && (
+    <div class="search-section" transition:persist="search-section">
+      <h3 class="search-title">Search</h3>
+      <div class="search-form">
+        <div class="search-input-wrapper">
+          <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            id="search-input"
+            class="search-input"
+            placeholder="Search by title or description..."
+            value={searchQuery ?? ''}
+          />
+          <button 
+            type="button" 
+            id="search-clear" 
+            class="search-clear" 
+            aria-label="Clear search"
+            style={searchQuery ? '' : 'display: none;'}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="4" y1="4" x2="20" y2="20" />
+              <line x1="20" y1="4" x2="4" y2="20" />
+            </svg>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    {tagFilters.length > 0 && (
       <div class="filter-indicator">
         <span class="filter-label">Filtered by:</span>
-        <span class="filter-tag">{tagFilter}</span>
-        <a href="/" class="clear-btn" aria-label="Clear filter">
+        <div class="filter-tags">
+          {tagFilters.map((tag) => (
+            <span class="filter-tag-item">
+              <span class="filter-tag">{tag}</span>
+              <a href={buildUrl({ removeTag: tag })} class="tag-remove-btn" aria-label={`Remove ${tag} filter`}>
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="4" y1="4" x2="20" y2="20" />
+                  <line x1="20" y1="4" x2="4" y2="20" />
+                </svg>
+              </a>
+            </span>
+          ))}
+        </div>
+        <a href={buildUrl({ tags: null })} class="clear-btn" aria-label="Clear all filters">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="4" y1="4" x2="20" y2="20" />
             <line x1="20" y1="4" x2="4" y2="20" />
@@ -29,12 +100,90 @@ const memes = tagFilter
     )}
   </div>
 
-  <Gallery memes={memes} activeTag={tagFilter ?? undefined} />
+  <Gallery memes={memes} activeTags={tagFilters} searchQuery={searchQuery ?? undefined} />
 </Layout>
 
 <style>
   .page-header {
     margin-bottom: var(--spacing-lg);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  .search-section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .search-title {
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--color-text);
+    margin: 0;
+  }
+
+  .search-form {
+    width: 100%;
+    max-width: 500px;
+  }
+
+  .search-input-wrapper {
+    position: relative;
+    display: flex;
+    align-items: center;
+  }
+
+  .search-icon {
+    position: absolute;
+    left: var(--spacing-sm);
+    color: var(--color-text-muted);
+    pointer-events: none;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: var(--spacing-sm) var(--spacing-md);
+    padding-left: calc(var(--spacing-sm) + 18px + var(--spacing-sm));
+    padding-right: calc(var(--spacing-sm) + 24px);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    color: var(--color-text);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+
+  .search-input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .search-input:focus {
+    outline: none;
+    border-color: var(--color-accent);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  }
+
+  .search-clear {
+    position: absolute;
+    right: var(--spacing-xs);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-full);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .search-clear:hover {
+    background: var(--color-error);
+    color: white;
   }
 
   .filter-indicator {
@@ -43,8 +192,10 @@ const memes = tagFilter
     gap: var(--spacing-sm);
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-full);
+    border-radius: var(--radius-md);
     padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-md);
+    align-self: flex-start;
+    flex-wrap: wrap;
   }
 
   .filter-label {
@@ -52,13 +203,45 @@ const memes = tagFilter
     font-size: 0.875rem;
   }
 
-  .filter-tag {
+  .filter-tags {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    flex-wrap: wrap;
+  }
+
+  .filter-tag-item {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
     background: var(--color-accent);
-    color: white;
-    padding: var(--spacing-xs) var(--spacing-sm);
     border-radius: var(--radius-full);
+    padding-left: var(--spacing-sm);
+  }
+
+  .filter-tag {
+    color: white;
     font-size: 0.75rem;
     font-weight: 500;
+  }
+
+  .tag-remove-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-full);
+    color: rgba(255, 255, 255, 0.7);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .tag-remove-btn:hover {
+    color: white;
+    background: rgba(0, 0, 0, 0.2);
   }
 
   .clear-btn {
@@ -80,3 +263,64 @@ const memes = tagFilter
     color: white;
   }
 </style>
+
+<script>
+  import { navigate } from 'astro:transitions/client';
+
+  function initSearch() {
+    const searchInput = document.getElementById('search-input') as HTMLInputElement;
+    const clearBtn = document.getElementById('search-clear') as HTMLButtonElement;
+    
+    if (!searchInput || !clearBtn) return;
+    if ((searchInput as any)._searchInitialized) return;
+    (searchInput as any)._searchInitialized = true;
+
+    let debounceTimer: ReturnType<typeof setTimeout>;
+
+    function updateUrl(query: string) {
+      const url = new URL(window.location.href);
+      if (query.trim()) {
+        url.searchParams.set('q', query.trim());
+      } else {
+        url.searchParams.delete('q');
+      }
+      navigate(url.pathname + url.search);
+    }
+
+    function handleInput() {
+      const value = searchInput.value;
+      clearBtn.style.display = value ? '' : 'none';
+      
+      clearTimeout(debounceTimer);
+      debounceTimer = setTimeout(() => {
+        const currentQuery = new URL(window.location.href).searchParams.get('q') ?? '';
+        if (value.trim() !== currentQuery) {
+          updateUrl(value);
+        }
+      }, 500);
+    }
+
+    function handleClear() {
+      searchInput.value = '';
+      clearBtn.style.display = 'none';
+      clearTimeout(debounceTimer);
+      
+      const url = new URL(window.location.href);
+      if (url.searchParams.has('q')) {
+        url.searchParams.delete('q');
+        navigate(url.pathname + url.search);
+      }
+    }
+
+    searchInput.addEventListener('input', handleInput);
+    clearBtn.addEventListener('click', handleClear);
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initSearch);
+  } else {
+    initSearch();
+  }
+  
+  document.addEventListener('astro:page-load', initSearch);
+</script>

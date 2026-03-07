@@ -49,6 +49,8 @@ const tags = await getAllTags();
 </form>
 
 <script>
+  import { navigate } from 'astro:transitions/client';
+
   function initUploadForm() {
     const form = document.getElementById('upload-form') as HTMLFormElement | null;
     const formFields = document.getElementById('form-fields');
@@ -165,10 +167,10 @@ const tags = await getAllTags();
           throw new Error(result.error || 'Upload failed');
         }
 
-        // Success - reset form and reload page
+        // Success - reset form and navigate to refresh with animation
         (dropzone as any).clearPreview?.();
         hideFormFields();
-        window.location.reload();
+        navigate(window.location.pathname + window.location.search);
       } catch (error) {
         showError(error instanceof Error ? error.message : 'Upload failed');
       } finally {

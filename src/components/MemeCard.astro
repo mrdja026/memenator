@@ -9,10 +9,10 @@ interface Props {
   fileUrl: string;
   fileType: string;
   tags: Array<{ id: string; name: string }>;
-  activeTag?: string;
+  activeTags?: string[];
 }
 
-const { id, title, description, fileUrl, fileType, tags, activeTag } = Astro.props;
+const { id, title, description, fileUrl, fileType, tags, activeTags = [] } = Astro.props;
 ---
 
 <article class="meme-card" data-meme-id={id} id={`meme-${id}`}>
@@ -62,7 +62,7 @@ const { id, title, description, fileUrl, fileType, tags, activeTag } = Astro.pro
     {tags.length > 0 && (
       <div class="tags">
         {tags.map((tag) => (
-          <TagPill name={tag.name} active={tag.name === activeTag} />
+          <TagPill name={tag.name} active={activeTags.includes(tag.name)} />
         ))}
       </div>
     )}
@@ -70,6 +70,8 @@ const { id, title, description, fileUrl, fileType, tags, activeTag } = Astro.pro
 </article>
 
 <script>
+  import { navigate } from 'astro:transitions/client';
+
   function initMemeCards() {
     document.querySelectorAll('.delete-btn').forEach((btn) => {
       // Prevent duplicate handlers
@@ -95,13 +97,13 @@ const { id, title, description, fileUrl, fileType, tags, activeTag } = Astro.pro
             throw new Error('Delete failed');
           }
 
-          // Remove from DOM and reload
+          // Remove from DOM with animation
           const card = btn.closest('.meme-card');
           card?.remove();
           
-          // If no memes left, reload to show empty state
+          // If no memes left, navigate to show empty state
           if (document.querySelectorAll('.meme-card').length === 0) {
-            window.location.reload();
+            navigate(window.location.pathname + window.location.search);
           }
         } catch (error) {
           alert('Failed to delete meme');
