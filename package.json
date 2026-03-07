@@ -5,10 +5,11 @@
   "scripts": {
     "dev": "astro dev",
     "dev:remote": "astro dev --remote",
+    "dev:network": "set -a && source .env && set +a && astro dev --remote",
     "build": "astro build --remote",
     "preview": "astro preview",
     "astro": "astro",
-    "db:start": "docker compose up db -d",
+    "db:start": "docker compose up db minio -d",
     "db:stop": "docker compose down",
     "db:push": "astro db push --remote"
   },

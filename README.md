@@ -111,3 +111,81 @@ npm run db:stop
 - **Media files** (images, videos) are stored in MinIO with presigned URLs for access
 - **Metadata** (titles, descriptions, tags) are stored in libSQL
 - Both use Docker volumes for persistence across restarts
+
+## Network Access
+
+The app is configured to be accessible from other devices on your local network.
+
+### Find Your IP Address
+
+```bash
+# Linux/macOS
+hostname -I
+# or
+ip a | grep inet
+
+# Windows
+ipconfig
+```
+
+Look for an IP like `192.168.x.x` or `10.0.x.x`.
+
+### Access from Another Device
+
+Open a browser on any device on the same network and go to:
+
+```
+http://<YOUR_IP>:4321
+```
+
+For example: `http://192.168.1.50:4321`
+
+### Firewall (Linux)
+
+If you can't connect, allow ports through the firewall:
+
+```bash
+sudo ufw allow 4321  # App
+sudo ufw allow 9000  # MinIO
+```
+
+### Configure for Network Access
+
+Update `.env` with your machine's IP:
+
+```bash
+MINIO_ENDPOINT=http://YOUR_IP:9000
+```
+
+## Production Deployment (Docker)
+
+Deploy the full stack with Docker Compose:
+
+```bash
+# 1. Update .env with your IP for network access
+sed -i 's|MINIO_ENDPOINT=.*|MINIO_ENDPOINT=http://YOUR_IP:9000|' .env
+
+# 2. Build and start all services
+docker compose up -d --build
+
+# 3. Push database schema (first time only)
+docker compose exec app npm run db:push
+```
+
+The app will be available at `http://YOUR_IP:4321` from any device on your network.
+
+### Manage Production
+
+```bash
+# View logs
+docker compose logs -f app
+
+# Restart services
+docker compose restart
+
+# Stop all services
+docker compose down
+
+# Update and rebuild
+git pull && docker compose up -d --build
+```
