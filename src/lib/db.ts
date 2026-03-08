@@ -128,6 +128,16 @@ export async function deleteMeme(id: string): Promise<boolean> {
   return true;
 }
 
+export async function updateMemeSharedUrl(id: string, sharedUrl: string): Promise<boolean> {
+  const result = await db.update(Meme).set({ sharedUrl }).where(eq(Meme.id, id));
+  return result.rowsAffected > 0;
+}
+
+export async function getMemeSharedUrl(id: string): Promise<string | null> {
+  const meme = await db.select({ sharedUrl: Meme.sharedUrl }).from(Meme).where(eq(Meme.id, id)).limit(1);
+  return meme[0]?.sharedUrl || null;
+}
+
 export async function getAllTags(): Promise<Array<{ id: string; name: string }>> {
   return db.select().from(Tag).orderBy(Tag.name);
 }

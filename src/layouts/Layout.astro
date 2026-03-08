@@ -1,5 +1,6 @@
 ---
 import { ClientRouter } from 'astro:transitions';
+import Toast from '../components/Toast.astro';
 
 interface Props {
   title?: string;
@@ -27,6 +28,7 @@ const { title = 'Memenator' } = Astro.props;
         <slot />
       </main>
     </div>
+    <Toast />
   </body>
 </html>
 

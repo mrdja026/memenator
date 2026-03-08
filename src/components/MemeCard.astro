@@ -41,18 +41,38 @@ const { id, title, description, fileUrl, fileType, tags, activeTags = [] } = Ast
   <div class="content">
     <div class="header">
       <h2 class="title">{title}</h2>
-      <button 
-        type="button" 
-        class="delete-btn" 
-        data-meme-id={id}
-        aria-label="Delete meme"
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/>
-          <line x1="10" y1="11" x2="10" y2="17"/>
-          <line x1="14" y1="11" x2="14" y2="17"/>
-        </svg>
-      </button>
+      <div class="header-actions">
+        <button 
+          type="button" 
+          class="share-btn" 
+          data-meme-id={id}
+          aria-label="Share meme"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="share-icon">
+            <circle cx="18" cy="5" r="3"></circle>
+            <circle cx="6" cy="12" r="3"></circle>
+            <circle cx="18" cy="19" r="3"></circle>
+            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+          </svg>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="loading-icon" style="display: none;">
+            <circle cx="12" cy="12" r="10"></circle>
+            <path d="M12 6v6l4 2"></path>
+          </svg>
+        </button>
+        <button 
+          type="button" 
+          class="delete-btn" 
+          data-meme-id={id}
+          aria-label="Delete meme"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6h14z"/>
+            <line x1="10" y1="11" x2="10" y2="17"/>
+            <line x1="14" y1="11" x2="14" y2="17"/>
+          </svg>
+        </button>
+      </div>
     </div>
 
     {description && (
@@ -74,7 +94,6 @@ const { id, title, description, fileUrl, fileType, tags, activeTags = [] } = Ast
 
   function initMemeCards() {
     document.querySelectorAll('.delete-btn').forEach((btn) => {
-      // Prevent duplicate handlers
       if ((btn as any)._initialized) return;
       (btn as any)._initialized = true;
 
@@ -97,11 +116,9 @@ const { id, title, description, fileUrl, fileType, tags, activeTags = [] } = Ast
             throw new Error('Delete failed');
           }
 
-          // Remove from DOM with animation
           const card = btn.closest('.meme-card');
           card?.remove();
           
-          // If no memes left, navigate to show empty state
           if (document.querySelectorAll('.meme-card').length === 0) {
             navigate(window.location.pathname + window.location.search);
           }
@@ -111,7 +128,64 @@ const { id, title, description, fileUrl, fileType, tags, activeTags = [] } = Ast
       });
     });
 
-    // Lazy load videos with Intersection Observer
+    document.querySelectorAll('.share-btn').forEach((btn) => {
+      if ((btn as any)._initialized) return;
+      (btn as any)._initialized = true;
+
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        const memeId = btn.getAttribute('data-meme-id');
+        if (!memeId) return;
+
+        const shareIcon = btn.querySelector('.share-icon') as HTMLElement;
+        const loadingIcon = btn.querySelector('.loading-icon') as HTMLElement;
+        
+        btn.setAttribute('disabled', 'true');
+        if (shareIcon) shareIcon.style.display = 'none';
+        if (loadingIcon) {
+          loadingIcon.style.display = 'block';
+          loadingIcon.classList.add('spinning');
+        }
+
+        try {
+          const response = await fetch('/api/share', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ memeId }),
+          });
+
+          const result = await response.json();
+
+          if (result.success && result.link) {
+            (window as any).showToast?.({
+              type: 'success',
+              message: 'Shared successfully!',
+              link: result.link,
+            });
+          } else {
+            (window as any).showToast?.({
+              type: 'error',
+              message: result.error || 'Failed to share',
+            });
+          }
+        } catch (error) {
+          (window as any).showToast?.({
+            type: 'error',
+            message: 'Failed to connect to share service',
+          });
+        } finally {
+          btn.removeAttribute('disabled');
+          if (shareIcon) shareIcon.style.display = 'block';
+          if (loadingIcon) {
+            loadingIcon.style.display = 'none';
+            loadingIcon.classList.remove('spinning');
+          }
+        }
+      });
+    });
+
     const videos = document.querySelectorAll('video[preload="metadata"]');
     const observer = new IntersectionObserver((entries) => {
       entries.forEach((entry) => {
@@ -126,14 +200,12 @@ const { id, title, description, fileUrl, fileType, tags, activeTags = [] } = Ast
     videos.forEach((video) => observer.observe(video));
   }
 
-  // Run on initial load
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initMemeCards);
   } else {
     initMemeCards();
   }
   
-  // Run on view transitions
   document.addEventListener('astro:page-load', initMemeCards);
 </script>
 
@@ -180,6 +252,12 @@ const { id, title, description, fileUrl, fileType, tags, activeTags = [] } = Ast
     gap: var(--spacing-md);
   }
 
+  .header-actions {
+    display: flex;
+    gap: var(--spacing-xs);
+    flex-shrink: 0;
+  }
+
   .title {
     font-size: 1.125rem;
     font-weight: 600;
@@ -187,6 +265,7 @@ const { id, title, description, fileUrl, fileType, tags, activeTags = [] } = Ast
     margin: 0;
   }
 
+  .share-btn,
   .delete-btn {
     flex-shrink: 0;
     width: 32px;
@@ -202,10 +281,30 @@ const { id, title, description, fileUrl, fileType, tags, activeTags = [] } = Ast
     transition: all 0.15s ease;
   }
 
+  .share-btn:hover {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: white;
+  }
+
+  .share-btn:disabled {
+    cursor: not-allowed;
+    opacity: 0.7;
+  }
+
   .delete-btn:hover {
     background: var(--color-error);
     border-color: var(--color-error);
     color: white;
+  }
+
+  @keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+
+  .spinning {
+    animation: spin 1s linear infinite;
   }
 
   .description {

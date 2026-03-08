@@ -94,6 +94,24 @@ npm run db:stop
 | `MINIO_ACCESS_KEY` | MinIO access key | `minioadmin` |
 | `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` |
 | `MINIO_BUCKET` | Bucket name for media | `memenator-media` |
+| `IMGBB_API_KEY` | ImgBB API key for sharing | (optional) |
+
+## Sharing Memes
+
+Memenator supports sharing memes via [ImgBB](https://imgbb.com/), a free image hosting service.
+
+### Setup
+
+1. Get a free API key at https://api.imgbb.com/
+2. Add it to your `.env` file:
+   ```bash
+   IMGBB_API_KEY=your_api_key_here
+   ```
+3. Restart the app container (see below)
+
+### Usage
+
+Click the share button (next to delete) on any meme card. The meme will be uploaded to ImgBB and you'll get a shareable link with a copy button.
 
 ## Scripts
 
@@ -180,12 +198,30 @@ The app will be available at `http://YOUR_IP:4321` from any device on your netwo
 # View logs
 docker compose logs -f app
 
-# Restart services
+# Restart services (preserves data)
 docker compose restart
 
-# Stop all services
+# Restart with rebuild (after code changes, preserves data)
+docker compose up -d --build
+
+# Stop all services (preserves data)
 docker compose down
 
 # Update and rebuild
 git pull && docker compose up -d --build
+
+# DANGER: Remove all data
+docker compose down -v
 ```
+
+### Restart Without Data Loss
+
+Data is stored in Docker volumes (`memenator-db-data` and `memenator-minio-data`) which persist across restarts.
+
+**Safe commands** (data preserved):
+- `docker compose restart` - Quick restart
+- `docker compose down && docker compose up -d` - Full restart
+- `docker compose up -d --build` - Rebuild and restart
+
+**Dangerous command** (data deleted):
+- `docker compose down -v` - Removes volumes and all data

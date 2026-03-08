@@ -1,0 +1,261 @@
+---
+---
+
+<div id="toast-container" class="toast-container"></div>
+
+<script>
+  interface ToastOptions {
+    type: 'success' | 'error';
+    message: string;
+    link?: string;
+    duration?: number;
+  }
+
+  async function copyToClipboard(text: string): Promise<boolean> {
+    if (navigator.clipboard && window.isSecureContext) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return true;
+      } catch {
+        return fallbackCopy(text);
+      }
+    }
+    return fallbackCopy(text);
+  }
+
+  function fallbackCopy(text: string): boolean {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    textarea.style.position = 'fixed';
+    textarea.style.left = '-9999px';
+    textarea.style.top = '-9999px';
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    
+    let success = false;
+    try {
+      success = document.execCommand('copy');
+    } catch {
+      success = false;
+    }
+    
+    document.body.removeChild(textarea);
+    return success;
+  }
+
+  function createToast(options: ToastOptions, autoCopied: boolean): HTMLElement {
+    const { type, message, link, duration = 10000 } = options;
+    
+    const toast = document.createElement('div');
+    toast.className = `toast toast-${type}`;
+    
+    const displayMessage = autoCopied ? `${message} Link copied!` : message;
+    let content = `<span class="toast-message">${displayMessage}</span>`;
+    
+    if (link) {
+      const btnText = autoCopied ? 'Copied!' : 'Copy';
+      content += `
+        <div class="toast-link-container">
+          <a href="${link}" target="_blank" rel="noopener noreferrer" class="toast-link">${link}</a>
+          <button type="button" class="toast-copy-btn" data-link="${link}">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+            <span>${btnText}</span>
+          </button>
+        </div>
+      `;
+    }
+    
+    content += `
+      <button type="button" class="toast-close" aria-label="Close">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    `;
+    
+    toast.innerHTML = content;
+    
+    const closeBtn = toast.querySelector('.toast-close');
+    closeBtn?.addEventListener('click', () => dismissToast(toast));
+    
+    const copyBtn = toast.querySelector('.toast-copy-btn');
+    if (copyBtn) {
+      if (autoCopied) {
+        setTimeout(() => {
+          const span = copyBtn.querySelector('span');
+          if (span) span.textContent = 'Copy';
+        }, 2000);
+      }
+      
+      copyBtn.addEventListener('click', async () => {
+        const linkToCopy = copyBtn.getAttribute('data-link');
+        if (linkToCopy) {
+          const success = await copyToClipboard(linkToCopy);
+          const span = copyBtn.querySelector('span');
+          if (span) {
+            span.textContent = success ? 'Copied!' : 'Failed';
+            setTimeout(() => {
+              span.textContent = 'Copy';
+            }, 2000);
+          }
+        }
+      });
+    }
+    
+    if (duration > 0) {
+      setTimeout(() => dismissToast(toast), duration);
+    }
+    
+    return toast;
+  }
+
+  function dismissToast(toast: HTMLElement): void {
+    toast.classList.add('toast-exit');
+    setTimeout(() => toast.remove(), 300);
+  }
+
+  async function showToast(options: ToastOptions): Promise<void> {
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    
+    let autoCopied = false;
+    if (options.link) {
+      autoCopied = await copyToClipboard(options.link);
+    }
+    
+    const toast = createToast(options, autoCopied);
+    container.appendChild(toast);
+    
+    requestAnimationFrame(() => {
+      toast.classList.add('toast-enter');
+    });
+  }
+
+  (window as any).showToast = showToast;
+</script>
+
+<style is:global>
+  .toast-container {
+    position: fixed;
+    bottom: var(--spacing-lg);
+    right: var(--spacing-lg);
+    z-index: 1000;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    max-width: 400px;
+  }
+
+  .toast {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--spacing-md);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+    opacity: 0;
+    transform: translateX(100%);
+    transition: all 0.3s ease;
+  }
+
+  .toast-enter {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  .toast-exit {
+    opacity: 0;
+    transform: translateX(100%);
+  }
+
+  .toast-success {
+    border-left: 3px solid var(--color-accent);
+  }
+
+  .toast-error {
+    border-left: 3px solid var(--color-error);
+  }
+
+  .toast-message {
+    font-size: 0.875rem;
+    color: var(--color-text);
+    padding-right: var(--spacing-lg);
+  }
+
+  .toast-link-container {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+    background: var(--color-bg);
+    border-radius: var(--radius-sm);
+    padding: var(--spacing-xs) var(--spacing-sm);
+  }
+
+  .toast-link {
+    flex: 1;
+    font-size: 0.75rem;
+    color: var(--color-accent);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .toast-link:hover {
+    text-decoration: underline;
+  }
+
+  .toast-copy-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 8px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+    flex-shrink: 0;
+  }
+
+  .toast-copy-btn:hover {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: white;
+  }
+
+  .toast-close {
+    position: absolute;
+    top: var(--spacing-sm);
+    right: var(--spacing-sm);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: none;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    border-radius: var(--radius-sm);
+    transition: all 0.15s ease;
+  }
+
+  .toast-close:hover {
+    background: var(--color-bg);
+    color: var(--color-text);
+  }
+
+  .toast {
+    position: relative;
+  }
+</style>
