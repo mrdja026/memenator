@@ -21,7 +21,7 @@ const { title = 'Memenator' } = Astro.props;
   </head>
   <body>
     <div class="app">
-      <aside class="sidebar" transition:persist="sidebar" transition:animate="none">
+      <aside class="sidebar" transition:animate="none">
         <slot name="sidebar" />
       </aside>
       <main class="main" transition:animate="slide">
