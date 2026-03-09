@@ -15,6 +15,11 @@ interface Props {
 }
 
 const { id, title, description, fileUrl, fileType, tags, sharedUrl, giphyUrl, activeTags = [] } = Astro.props;
+
+function truncateUrl(url: string, maxLength = 25): string {
+  const stripped = url.replace(/^https?:\/\//, '');
+  return stripped.length > maxLength ? stripped.slice(0, maxLength) + '...' : stripped;
+}
 ---
 
 <article class="meme-card" data-meme-id={id} id={`meme-${id}`}>
@@ -122,7 +127,7 @@ const { id, title, description, fileUrl, fileType, tags, sharedUrl, giphyUrl, ac
               <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
             </svg>
             <span class="link-label">ImgBB</span>
-            <a href={sharedUrl} target="_blank" rel="noopener noreferrer" class="link-url">{sharedUrl.replace(/^https?:\/\//, '').slice(0, 25)}...</a>
+            <a href={sharedUrl} target="_blank" rel="noopener noreferrer" class="link-url">{truncateUrl(sharedUrl)}</a>
             <button type="button" class="copy-link-btn" data-url={sharedUrl} aria-label="Copy ImgBB link">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
@@ -137,7 +142,7 @@ const { id, title, description, fileUrl, fileType, tags, sharedUrl, giphyUrl, ac
               <path d="M2 2h20v20H2V2zm2 2v16h16V4H4zm2 2h12v2H6V6zm0 4h12v2H6v-2zm0 4h8v2H6v-2z"/>
             </svg>
             <span class="link-label giphy">GIPHY</span>
-            <a href={giphyUrl} target="_blank" rel="noopener noreferrer" class="link-url">{giphyUrl.replace(/^https?:\/\//, '').slice(0, 25)}...</a>
+            <a href={giphyUrl} target="_blank" rel="noopener noreferrer" class="link-url">{truncateUrl(giphyUrl)}</a>
             <button type="button" class="copy-link-btn" data-url={giphyUrl} aria-label="Copy Giphy link">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>

@@ -28,7 +28,7 @@ interface ImgBBApiResponse {
 }
 
 function getApiKey(): string | null {
-  return process.env.IMGBB_API_KEY || null;
+  return import.meta.env.IMGBB_API_KEY || null;
 }
 
 export async function uploadToImgBB(

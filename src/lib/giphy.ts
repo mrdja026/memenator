@@ -26,7 +26,7 @@ export interface GiphyUploadResult {
 }
 
 /**
- * Uploads a file to Giphy using child process curl for reliability
+ * Uploads a file to Giphy using the fetch API with multipart form data
  * 
  * @param fileBuffer - File buffer (GIF, MP4, MOV, or WEBM)
  * @param mimeType - MIME type of the file
@@ -49,56 +49,41 @@ export async function uploadToGiphy(
   console.log(`[Giphy] Uploading file: size=${fileBuffer.length} bytes, mimeType=${mimeType}`);
 
   try {
-    // Write buffer to temp file and use curl for reliable multipart upload
-    const { writeFile, unlink } = await import('fs/promises');
-    const { execSync } = await import('child_process');
-    const { tmpdir } = await import('os');
-    const { join } = await import('path');
-    const { randomUUID } = await import('crypto');
-    
-    const tempPath = join(tmpdir(), `${randomUUID()}.gif`);
-    
-    try {
-      // Write file to temp location
-      await writeFile(tempPath, fileBuffer);
-      
-      // Build curl command
-      const tagParam = tags.length > 0 ? `-F "tags=${tags.join(',')}"` : '';
-      const curlCmd = `curl -s -X POST "https://upload.giphy.com/v1/gifs" -F "api_key=${key}" -F "file=@${tempPath}" ${tagParam}`;
-      
-      console.log(`[Giphy] Executing curl upload...`);
-      
-      // Execute curl
-      const result = execSync(curlCmd, { 
-        encoding: 'utf-8',
-        timeout: 60000,
-      });
-      
-      console.log(`[Giphy] Response: ${result}`);
-      
-      const data: GiphyUploadResponse = JSON.parse(result);
-      
-      if (data.meta.status !== 200) {
-        throw new Error(`Giphy upload failed: ${data.meta.msg}`);
-      }
-
-      if (!data.data?.id) {
-        throw new Error('Giphy response missing GIF ID');
-      }
-
-      const giphyId = data.data.id;
-      const giphyUrl = `https://giphy.com/gifs/${giphyId}`;
-
-      console.log(`[Giphy] Upload successful: ${giphyUrl}`);
-
-      return {
-        url: giphyUrl,
-        id: giphyId,
-      };
-    } finally {
-      // Clean up temp file
-      await unlink(tempPath).catch(() => {});
+    const formData = new FormData();
+    formData.append('api_key', key);
+    formData.append('file', new Blob([fileBuffer], { type: 'image/gif' }), 'upload.gif');
+    if (tags.length > 0) {
+      formData.append('tags', tags.join(','));
     }
+
+    console.log(`[Giphy] Executing fetch upload...`);
+
+    const response = await fetch('https://upload.giphy.com/v1/gifs', {
+      method: 'POST',
+      body: formData,
+    });
+
+    const data: GiphyUploadResponse = await response.json();
+
+    console.log(`[Giphy] Response status: ${data.meta.status}`);
+
+    if (data.meta.status !== 200) {
+      throw new Error(`Giphy upload failed: ${data.meta.msg}`);
+    }
+
+    if (!data.data?.id) {
+      throw new Error('Giphy response missing GIF ID');
+    }
+
+    const giphyId = data.data.id;
+    const giphyUrl = `https://giphy.com/gifs/${giphyId}`;
+
+    console.log(`[Giphy] Upload successful: ${giphyUrl}`);
+
+    return {
+      url: giphyUrl,
+      id: giphyId,
+    };
   } catch (error) {
     if (error instanceof Error) {
       console.error(`[Giphy] Upload error: ${error.message}`);
