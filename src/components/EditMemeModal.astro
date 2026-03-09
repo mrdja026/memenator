@@ -1,0 +1,641 @@
+---
+---
+
+<dialog id="edit-meme-modal" class="edit-modal">
+  <div class="modal-content">
+    <header class="modal-header">
+      <h2 class="modal-title">Edit Meme</h2>
+      <button type="button" class="modal-close-btn" aria-label="Close">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"></line>
+          <line x1="6" y1="6" x2="18" y2="18"></line>
+        </svg>
+      </button>
+    </header>
+    
+    <div class="modal-body">
+      <!-- Media preview -->
+      <div class="preview-media" id="modal-preview-container"></div>
+      
+      <!-- Meme info -->
+      <div class="meme-info">
+        <h3 class="meme-title" id="modal-meme-title"></h3>
+        <p class="meme-description" id="modal-meme-description"></p>
+      </div>
+      
+      <!-- Cached links -->
+      <div class="cached-links" id="modal-cached-links"></div>
+      
+      <!-- Tag editor -->
+      <div class="tag-editor">
+        <label class="tag-label">Tags</label>
+        <div class="tag-input-wrapper" id="modal-tag-input-wrapper">
+          <div class="selected-tags" id="modal-tag-selected-tags"></div>
+          <div class="input-container">
+            <input 
+              type="text" 
+              class="tag-input" 
+              id="modal-tag-input"
+              placeholder="Add tags..."
+              autocomplete="off"
+            />
+            <div class="autocomplete-dropdown" id="modal-tag-dropdown" hidden></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <footer class="modal-footer">
+      <button type="button" class="btn btn-secondary" id="modal-cancel-btn">Cancel</button>
+      <button type="button" class="btn btn-primary" id="modal-save-btn">Save</button>
+    </footer>
+  </div>
+</dialog>
+
+<script>
+  import { navigate } from 'astro:transitions/client';
+  import { createTagInput, type TagInputAPI } from '@/lib/tag-input';
+
+  interface MemeData {
+    id: string;
+    title: string;
+    description: string | null;
+    fileUrl: string;
+    fileType: string;
+    tags: Array<{ id: string; name: string }>;
+    sharedUrl: string | null;
+    giphyUrl: string | null;
+  }
+
+  let currentMemeId: string | null = null;
+  let tagInputApi: TagInputAPI | null = null;
+
+  function navigatePreservingScroll() {
+    sessionStorage.setItem('memenator-scroll', String(window.scrollY));
+    navigate(window.location.pathname + window.location.search);
+  }
+
+  function renderCachedLinks(sharedUrl: string | null, giphyUrl: string | null) {
+    const container = document.getElementById('modal-cached-links');
+    if (!container) return;
+
+    if (!sharedUrl && !giphyUrl) {
+      container.hidden = true;
+      return;
+    }
+
+    container.hidden = false;
+    let html = '';
+
+    if (sharedUrl) {
+      html += `
+        <div class="cached-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="link-icon">
+            <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+            <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+          </svg>
+          <span class="link-label">ImgBB</span>
+          <a href="${sharedUrl}" target="_blank" rel="noopener noreferrer" class="link-url">${sharedUrl.replace(/^https?:\/\//, '').slice(0, 30)}...</a>
+          <button type="button" class="copy-link-btn" data-url="${sharedUrl}" aria-label="Copy ImgBB link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        </div>
+      `;
+    }
+
+    if (giphyUrl) {
+      html += `
+        <div class="cached-link">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" class="link-icon giphy">
+            <path d="M2 2h20v20H2V2zm2 2v16h16V4H4zm2 2h12v2H6V6zm0 4h12v2H6v-2zm0 4h8v2H6v-2z"/>
+          </svg>
+          <span class="link-label giphy">GIPHY</span>
+          <a href="${giphyUrl}" target="_blank" rel="noopener noreferrer" class="link-url">${giphyUrl.replace(/^https?:\/\//, '').slice(0, 30)}...</a>
+          <button type="button" class="copy-link-btn" data-url="${giphyUrl}" aria-label="Copy Giphy link">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+              <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+            </svg>
+          </button>
+        </div>
+      `;
+    }
+
+    container.innerHTML = html;
+
+    // Add copy handlers
+    container.querySelectorAll('.copy-link-btn').forEach(btn => {
+      btn.addEventListener('click', async (e) => {
+        e.preventDefault();
+        const url = btn.getAttribute('data-url');
+        if (url) {
+          try {
+            await navigator.clipboard.writeText(url);
+            (window as any).showToast?.({ type: 'success', message: 'Link copied!' });
+          } catch {
+            (window as any).showToast?.({ type: 'error', message: 'Failed to copy' });
+          }
+        }
+      });
+    });
+  }
+
+  function openModal(meme: MemeData) {
+    const modal = document.getElementById('edit-meme-modal') as HTMLDialogElement;
+    if (!modal) return;
+
+    currentMemeId = meme.id;
+
+    // Set title
+    const titleEl = document.getElementById('modal-meme-title');
+    if (titleEl) titleEl.textContent = meme.title;
+
+    // Set description
+    const descEl = document.getElementById('modal-meme-description');
+    if (descEl) {
+      if (meme.description) {
+        descEl.textContent = meme.description;
+        descEl.hidden = false;
+      } else {
+        descEl.hidden = true;
+      }
+    }
+
+    // Set preview
+    const previewContainer = document.getElementById('modal-preview-container');
+    if (previewContainer) {
+      if (meme.fileType === 'video') {
+        previewContainer.innerHTML = `<video src="${meme.fileUrl}" controls playsinline class="preview-media-element"></video>`;
+      } else {
+        previewContainer.innerHTML = `<img src="${meme.fileUrl}" alt="${meme.title}" class="preview-media-element" />`;
+      }
+    }
+
+    // Set cached links
+    renderCachedLinks(meme.sharedUrl, meme.giphyUrl);
+
+    // Set tags
+    tagInputApi?.setTags(meme.tags.map(t => t.name));
+
+    // Clear input
+    const input = document.getElementById('modal-tag-input') as HTMLInputElement;
+    if (input) input.value = '';
+
+    modal.showModal();
+  }
+
+  function closeModal() {
+    const modal = document.getElementById('edit-meme-modal') as HTMLDialogElement;
+    if (modal) {
+      modal.close();
+      currentMemeId = null;
+    }
+  }
+
+  async function saveTags(): Promise<boolean> {
+    if (!currentMemeId || !tagInputApi) return false;
+
+    try {
+      const response = await fetch(`/api/memes/${currentMemeId}/tags`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ tags: tagInputApi.getTags() }),
+      });
+      const result = await response.json();
+      return result.success;
+    } catch (error) {
+      console.error('Failed to save tags:', error);
+      return false;
+    }
+  }
+
+  function initModal() {
+    const modal = document.getElementById('edit-meme-modal') as HTMLDialogElement;
+    if (!modal || (modal as any)._initialized) return;
+    (modal as any)._initialized = true;
+
+    // Init tag input
+    const wrapper = document.getElementById('modal-tag-input-wrapper') as HTMLElement;
+    const input = document.getElementById('modal-tag-input') as HTMLInputElement;
+    const dropdown = document.getElementById('modal-tag-dropdown') as HTMLElement;
+    const tagsContainer = document.getElementById('modal-tag-selected-tags') as HTMLElement;
+
+    if (wrapper && input && dropdown && tagsContainer) {
+      tagInputApi = createTagInput({ wrapper, input, dropdown, tagsContainer });
+    }
+
+    const closeBtn = modal.querySelector('.modal-close-btn');
+    const cancelBtn = document.getElementById('modal-cancel-btn');
+    const saveBtn = document.getElementById('modal-save-btn');
+
+    closeBtn?.addEventListener('click', closeModal);
+    cancelBtn?.addEventListener('click', closeModal);
+
+    // Backdrop click to close
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+
+    // Escape closes without reload
+    modal.addEventListener('cancel', (e) => {
+      e.preventDefault();
+      closeModal();
+    });
+
+    // Save
+    saveBtn?.addEventListener('click', async () => {
+      saveBtn.setAttribute('disabled', 'true');
+      saveBtn.textContent = 'Saving...';
+
+      const success = await saveTags();
+      
+      if (success) {
+        closeModal();
+        (window as any).showToast?.({ type: 'success', message: 'Tags updated!' });
+        setTimeout(() => navigatePreservingScroll(), 300);
+      } else {
+        (window as any).showToast?.({ type: 'error', message: 'Failed to update tags' });
+        saveBtn.removeAttribute('disabled');
+        saveBtn.textContent = 'Save';
+      }
+    });
+  }
+
+  (window as any).openEditMemeModal = openModal;
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initModal);
+  } else {
+    initModal();
+  }
+  document.addEventListener('astro:page-load', initModal);
+</script>
+
+<style is:global>
+  .edit-modal {
+    position: fixed;
+    margin: auto;
+    padding: 0;
+    border: none;
+    background: var(--color-surface);
+    border-radius: var(--radius-lg);
+    max-width: 650px;
+    width: calc(100% - 2rem);
+    max-height: calc(100vh - 4rem);
+    overflow: hidden;
+    color: var(--color-text);
+    box-shadow: 0 16px 48px rgba(0, 0, 0, 0.4);
+    
+    opacity: 0;
+    transform: scale(0.95);
+    transition: opacity 200ms ease, transform 200ms ease;
+  }
+
+  .edit-modal[open] {
+    opacity: 1;
+    transform: scale(1);
+  }
+
+  .edit-modal::backdrop {
+    background: rgba(0, 0, 0, 0);
+    transition: background 200ms ease;
+  }
+
+  .edit-modal[open]::backdrop {
+    background: rgba(0, 0, 0, 0.8);
+  }
+
+  .edit-modal .modal-content {
+    display: flex;
+    flex-direction: column;
+    max-height: calc(100vh - 4rem);
+  }
+
+  .edit-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: var(--spacing-lg);
+    border-bottom: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+
+  .edit-modal .modal-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .edit-modal .modal-close-btn {
+    width: 32px;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .edit-modal .modal-close-btn:hover {
+    background: var(--color-error);
+    border-color: var(--color-error);
+    color: white;
+  }
+
+  .edit-modal .modal-body {
+    padding: var(--spacing-lg);
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-md);
+  }
+
+  /* Media preview */
+  .edit-modal .preview-media {
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    max-height: 350px;
+  }
+
+  .edit-modal .preview-media-element {
+    max-width: 100%;
+    max-height: 350px;
+    object-fit: contain;
+  }
+
+  /* Meme info */
+  .edit-modal .meme-info {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .edit-modal .meme-title {
+    font-size: 1.125rem;
+    font-weight: 600;
+    margin: 0;
+  }
+
+  .edit-modal .meme-description {
+    color: var(--color-text-muted);
+    font-size: 0.875rem;
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  /* Cached links */
+  .edit-modal .cached-links {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-xs);
+  }
+
+  .edit-modal .cached-link {
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    font-size: 0.75rem;
+  }
+
+  .edit-modal .cached-link .link-icon {
+    flex-shrink: 0;
+    color: var(--color-accent);
+  }
+
+  .edit-modal .cached-link .link-icon.giphy {
+    color: #00ff99;
+  }
+
+  .edit-modal .cached-link .link-label {
+    font-weight: 600;
+    color: var(--color-accent);
+    flex-shrink: 0;
+  }
+
+  .edit-modal .cached-link .link-label.giphy {
+    color: #00ff99;
+  }
+
+  .edit-modal .cached-link .link-url {
+    color: var(--color-text-muted);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+    min-width: 0;
+  }
+
+  .edit-modal .cached-link .link-url:hover {
+    color: var(--color-text);
+    text-decoration: underline;
+  }
+
+  .edit-modal .copy-link-btn {
+    flex-shrink: 0;
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: transparent;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .edit-modal .copy-link-btn:hover {
+    background: var(--color-accent);
+    border-color: var(--color-accent);
+    color: white;
+  }
+
+  /* Tag editor */
+  .edit-modal .tag-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+
+  .edit-modal .tag-label {
+    font-weight: 500;
+    font-size: 0.875rem;
+  }
+
+  .edit-modal .tag-input-wrapper {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-sm);
+    background: var(--color-bg);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    min-height: 42px;
+    align-items: center;
+  }
+
+  .edit-modal .tag-input-wrapper:focus-within {
+    border-color: var(--color-accent);
+  }
+
+  .edit-modal .selected-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  .edit-modal .input-container {
+    flex: 1;
+    min-width: 100px;
+    position: relative;
+  }
+
+  .edit-modal .tag-input {
+    width: 100%;
+    background: transparent;
+    border: none;
+    color: var(--color-text);
+    font-size: 0.875rem;
+    outline: none;
+  }
+
+  .edit-modal .tag-input::placeholder {
+    color: var(--color-text-muted);
+  }
+
+  .edit-modal .autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    margin-top: var(--spacing-xs);
+    z-index: 100;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  .edit-modal .dropdown-item {
+    padding: var(--spacing-sm) var(--spacing-md);
+    cursor: pointer;
+    font-size: 0.875rem;
+    transition: background 0.1s ease;
+  }
+
+  .edit-modal .dropdown-item:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .edit-modal .dropdown-item.create {
+    color: var(--color-accent);
+  }
+
+  .edit-modal .tag-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--spacing-xs);
+    padding: var(--spacing-xs) var(--spacing-sm);
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-full);
+    font-size: 0.75rem;
+    color: var(--color-text);
+  }
+
+  .edit-modal .tag-pill.removable {
+    padding-right: var(--spacing-xs);
+  }
+
+  .edit-modal .tag-pill.shake {
+    animation: modal-shake 0.3s ease;
+  }
+
+  @keyframes modal-shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-4px); }
+    75% { transform: translateX(4px); }
+  }
+
+  .edit-modal .remove-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 16px;
+    height: 16px;
+    padding: 0;
+    background: none;
+    border: none;
+    border-radius: var(--radius-full);
+    color: var(--color-text-muted);
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .edit-modal .remove-btn:hover {
+    background: var(--color-error);
+    color: white;
+  }
+
+  /* Footer */
+  .edit-modal .modal-footer {
+    display: flex;
+    justify-content: flex-end;
+    gap: var(--spacing-sm);
+    padding: var(--spacing-lg);
+    border-top: 1px solid var(--color-border);
+    flex-shrink: 0;
+  }
+
+  .edit-modal .btn {
+    padding: var(--spacing-sm) var(--spacing-lg);
+    border-radius: var(--radius-md);
+    font-size: 0.875rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+
+  .edit-modal .btn-secondary {
+    background: transparent;
+    border: 1px solid var(--color-border);
+    color: var(--color-text);
+  }
+
+  .edit-modal .btn-secondary:hover {
+    background: var(--color-surface-hover);
+  }
+
+  .edit-modal .btn-primary {
+    background: var(--color-accent);
+    border: 1px solid var(--color-accent);
+    color: white;
+  }
+
+  .edit-modal .btn-primary:hover {
+    background: var(--color-accent-hover);
+    border-color: var(--color-accent-hover);
+  }
+
+  .edit-modal .btn-primary:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+</style>

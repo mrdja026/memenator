@@ -1,0 +1,336 @@
+openapi: 3.0.3
+info:
+  title: Memenator Giphy Share API
+  description: |
+    API endpoint for sharing memes to Giphy with automatic GIF conversion.
+    
+    This API enables users to:
+    - Upload memes (images or videos) to Giphy as GIFs
+    - Automatically convert videos to optimized GIFs using ffmpeg
+    - Cache uploaded URLs to prevent duplicate uploads
+    - Copy shareable links with hashtags to clipboard
+    
+    **Technical Stack:**
+    - Framework: Astro 5.0+ (SSR)
+    - Storage: MinIO (S3-compatible)
+    - Database: libSQL (SQLite-compatible)
+    - Conversion: ffmpeg (480p, 15fps, 256 colors)
+    
+    **User Flow:**
+    1. User clicks Giphy share button on meme card
+    2. System checks for cached Giphy URL
+    3. If not cached:
+       - Fetches file from MinIO
+       - Converts video to GIF if needed (shows "Converting..." toast)
+       - Uploads to Giphy with tags (shows "Uploading..." toast)
+       - Caches result in database
+    4. Copies "{giphy_url} #tag1 #tag2" to clipboard
+    5. Shows success toast and visual badge
+    
+  version: 1.0.0
+  contact:
+    name: Memenator API Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:4321
+    description: Local development server
+  - url: https://memenator.app
+    description: Production server
+
+tags:
+  - name: Share
+    description: Meme sharing operations
+
+paths:
+  /api/share/giphy:
+    post:
+      tags:
+        - Share
+      summary: Share meme to Giphy
+      description: |
+        Converts a meme (image or video) to GIF format and uploads it to Giphy.
+        
+        **Process Flow:**
+        1. Validates GIPHY_API_KEY environment variable
+        2. Fetches meme from database (with tags)
+        3. Checks cache - returns immediately if giphyUrl exists
+        4. Fetches file from MinIO storage
+        5. Converts to GIF if needed:
+           - Videos (MP4): ffmpeg conversion (480p, 15fps, 256 colors, ~5MB max)
+           - Images (PNG/JPG): Convert to GIF if not already
+        6. Uploads to Giphy Upload API with tags
+        7. Stores URL in database (giphyUrl field)
+        8. Returns formatted link with hashtags
+        
+        **Caching Strategy:**
+        - First upload: Stores giphyUrl in database
+        - Subsequent requests: Returns cached URL instantly
+        - Prevents duplicate uploads and API rate limiting
+        
+        **Tag Formatting:**
+        Output format: "{giphy_url} #{tag1} #{tag2} #{tag3}"
+        Example: "https://giphy.com/gifs/abc123 #funny #cat #meme"
+        
+        **Video Conversion Details:**
+        - Resolution: 480p width (maintains aspect ratio)
+        - Frame rate: 15 fps (smooth playback, reasonable size)
+        - Colors: 256 color palette (good quality)
+        - Max size: ~5MB (optimized for sharing)
+        - Estimated time: 2-10 seconds depending on video length
+        
+      operationId: shareToGiphy
+      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - memeId
+              properties:
+                memeId:
+                  type: string
+                  format: uuid
+                  description: UUID of the meme to share (must exist in database)
+                  example: "123e4567-e89b-12d3-a456-426614174000"
+            examples:
+              shareImage:
+                summary: Share an image meme
+                value:
+                  memeId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+              shareVideo:
+                summary: Share a video meme (requires conversion)
+                value:
+                  memeId: "f9e8d7c6-b5a4-3210-9876-543210fedcba"
+      
+      responses:
+        '200':
+          description: |
+            Successfully shared to Giphy. Returns the shareable URL with formatted tags.
+            The `cached` field indicates whether this was retrieved from database cache.
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - link
+                  - linkWithTags
+                  - cached
+                  - tags
+                properties:
+                  success:
+                    type: boolean
+                    description: Indicates successful operation
+                    example: true
+                  link:
+                    type: string
+                    format: uri
+                    description: Direct Giphy URL of the uploaded GIF
+                    example: "https://giphy.com/gifs/abc123xyz"
+                  linkWithTags:
+                    type: string
+                    description: |
+                      Formatted string with Giphy URL followed by space-separated hashtags.
+                      Ready to copy to clipboard.
+                    example: "https://giphy.com/gifs/abc123xyz #funny #cat #meme"
+                  cached:
+                    type: boolean
+                    description: |
+                      True if URL was retrieved from database cache (no upload occurred).
+                      False if file was uploaded to Giphy during this request.
+                    example: false
+                  tags:
+                    type: array
+                    items:
+                      type: string
+                    description: Array of tags associated with the meme
+                    example: ["funny", "cat", "meme"]
+                  giphyId:
+                    type: string
+                    description: The unique Giphy ID extracted from the URL
+                    example: "abc123xyz"
+                  converted:
+                    type: boolean
+                    description: |
+                      True if video-to-GIF conversion was performed.
+                      Only present when fileType is "video".
+                    example: true
+              examples:
+                cachedResponse:
+                  summary: Cached Giphy URL (no upload needed)
+                  value:
+                    success: true
+                    link: "https://giphy.com/gifs/abc123xyz"
+                    linkWithTags: "https://giphy.com/gifs/abc123xyz #funny #cat"
+                    cached: true
+                    tags: ["funny", "cat"]
+                    giphyId: "abc123xyz"
+                
+                newUploadImage:
+                  summary: Newly uploaded image
+                  value:
+                    success: true
+                    link: "https://giphy.com/gifs/def456uvw"
+                    linkWithTags: "https://giphy.com/gifs/def456uvw #dogs #cute #pets"
+                    cached: false
+                    tags: ["dogs", "cute", "pets"]
+                    giphyId: "def456uvw"
+                
+                newUploadVideo:
+                  summary: Newly uploaded video (converted to GIF)
+                  value:
+                    success: true
+                    link: "https://giphy.com/gifs/ghi789rst"
+                    linkWithTags: "https://giphy.com/gifs/ghi789rst #animation #dancing"
+                    cached: false
+                    converted: true
+                    tags: ["animation", "dancing"]
+                    giphyId: "ghi789rst"
+        
+        '400':
+          description: |
+            Bad request - Invalid or missing parameters.
+            Common causes:
+            - Missing memeId in request body
+            - Invalid UUID format
+            - Empty request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingMemeId:
+                  summary: Missing memeId parameter
+                  value:
+                    success: false
+                    error: "Missing required parameter: memeId"
+                invalidUuid:
+                  summary: Invalid UUID format
+                  value:
+                    success: false
+                    error: "Invalid memeId format"
+                    details: "memeId must be a valid UUID"
+        
+        '404':
+          description: |
+            Meme not found in database.
+            The provided memeId does not match any existing meme.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                memeNotFound:
+                  summary: Meme does not exist
+                  value:
+                    success: false
+                    error: "Meme not found"
+                    details: "No meme exists with ID: 123e4567-e89b-12d3-a456-426614174000"
+        
+        '500':
+          description: |
+            Internal server error during processing.
+            Possible causes:
+            - GIPHY_API_KEY not configured in environment
+            - ffmpeg conversion failed
+            - MinIO file fetch failed
+            - Database operation failed
+            - Giphy upload failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                missingApiKey:
+                  summary: Giphy API key not configured
+                  value:
+                    success: false
+                    error: "GIPHY_API_KEY not configured"
+                    details: "Please add GIPHY_API_KEY to your .env file"
+                
+                conversionFailed:
+                  summary: Video-to-GIF conversion failed
+                  value:
+                    success: false
+                    error: "Failed to convert video to GIF"
+                    details: "ffmpeg process exited with code 1: unsupported codec"
+                
+                minioError:
+                  summary: Failed to fetch file from storage
+                  value:
+                    success: false
+                    error: "Failed to fetch file from MinIO"
+                    details: "Connection timeout after 5000ms"
+                
+                uploadError:
+                  summary: Giphy upload failed
+                  value:
+                    success: false
+                    error: "Failed to upload to Giphy"
+                    details: "Giphy API returned 400: file too large"
+        
+        '503':
+          description: |
+            Service unavailable - Giphy API is down or rate limited.
+            Common causes:
+            - Giphy API is experiencing downtime
+            - Daily upload limit exceeded (10 uploads/day for dev keys)
+            - Rate limit exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                rateLimited:
+                  summary: Giphy API rate limit exceeded
+                  value:
+                    success: false
+                    error: "Giphy API rate limit exceeded"
+                    details: "Daily upload limit reached (10/day for development keys)"
+                
+                serviceDown:
+                  summary: Giphy service unavailable
+                  value:
+                    success: false
+                    error: "Giphy API unavailable"
+                    details: "Unable to reach upload.giphy.com"
+
+components:
+  schemas:
+    Error:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          description: Always false for error responses
+          example: false
+        error:
+          type: string
+          description: Human-readable error message
+          example: "Failed to convert video to GIF"
+        details:
+          type: string
+          description: Additional technical details about the error (optional)
+          example: "ffmpeg conversion failed: unsupported codec"
+
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: |
+        Optional API key for authenticated requests.
+        Currently not implemented but reserved for future use.
+
+security: []
+
+externalDocs:
+  description: Giphy Upload API Documentation
+  url: https://developers.giphy.com/docs/api/endpoint/#upload

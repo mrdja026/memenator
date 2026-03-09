@@ -218,10 +218,17 @@ docker compose down -v
 
 Data is stored in Docker volumes (`memenator-db-data` and `memenator-minio-data`) which persist across restarts.
 
+**Quick restart (after code changes):**
+
+```bash
+docker compose build app && docker compose up -d app
+```
+
 **Safe commands** (data preserved):
-- `docker compose restart` - Quick restart
+- `docker compose restart` - Quick restart (no rebuild)
 - `docker compose down && docker compose up -d` - Full restart
-- `docker compose up -d --build` - Rebuild and restart
+- `docker compose up -d --build` - Rebuild and restart all services
+- `docker compose build app && docker compose up -d app` - Rebuild and restart app only
 
 **Dangerous command** (data deleted):
 - `docker compose down -v` - Removes volumes and all data

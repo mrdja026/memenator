@@ -9,6 +9,8 @@ export interface MemeWithTags {
   fileUrl: string;
   fileType: string;
   createdAt: Date;
+  sharedUrl: string | null;
+  giphyUrl: string | null;
   tags: Array<{ id: string; name: string }>;
 }
 
@@ -136,6 +138,43 @@ export async function updateMemeSharedUrl(id: string, sharedUrl: string): Promis
 export async function getMemeSharedUrl(id: string): Promise<string | null> {
   const meme = await db.select({ sharedUrl: Meme.sharedUrl }).from(Meme).where(eq(Meme.id, id)).limit(1);
   return meme[0]?.sharedUrl || null;
+}
+
+export async function updateMemeGiphyUrl(id: string, giphyUrl: string): Promise<boolean> {
+  const result = await db.update(Meme).set({ giphyUrl }).where(eq(Meme.id, id));
+  return result.rowsAffected > 0;
+}
+
+export async function getMemeGiphyUrl(id: string): Promise<string | null> {
+  const meme = await db.select({ giphyUrl: Meme.giphyUrl }).from(Meme).where(eq(Meme.id, id)).limit(1);
+  return meme[0]?.giphyUrl || null;
+}
+
+export async function updateMemeTags(id: string, tagNames: string[]): Promise<MemeWithTags | null> {
+  // Check if meme exists
+  const meme = await db.select().from(Meme).where(eq(Meme.id, id)).limit(1);
+  if (meme.length === 0) return null;
+
+  // Remove all existing tag associations
+  await db.delete(MemeTag).where(eq(MemeTag.memeId, id));
+
+  // Normalize and deduplicate tags
+  const normalizedTags = [...new Set(
+    tagNames
+      .map(t => t.toLowerCase().trim())
+      .filter(t => t.length > 0)
+  )];
+
+  // Create new tag associations
+  for (const tagName of normalizedTags) {
+    const tag = await getOrCreateTag(tagName);
+    await db.insert(MemeTag).values({
+      memeId: id,
+      tagId: tag.id,
+    });
+  }
+
+  return getMemeWithTags(id);
 }
 
 export async function getAllTags(): Promise<Array<{ id: string; name: string }>> {
