@@ -16,6 +16,9 @@ FROM node:22-alpine AS runtime
 
 WORKDIR /app
 
+# Install ffmpeg for GIF conversion and curl for Giphy uploads
+RUN apk add --no-cache ffmpeg curl
+
 COPY --from=build /app/dist ./dist
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/package.json ./

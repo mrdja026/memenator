@@ -1,5 +1,7 @@
 ---
 import { ClientRouter } from 'astro:transitions';
+import Toast from '../components/Toast.astro';
+import EditMemeModal from '../components/EditMemeModal.astro';
 
 interface Props {
   title?: string;
@@ -20,19 +22,28 @@ const { title = 'Memenator' } = Astro.props;
   </head>
   <body>
     <div class="app">
-      <aside class="sidebar" transition:persist="sidebar" transition:animate="none">
+      <aside class="sidebar" transition:animate="none">
         <slot name="sidebar" />
       </aside>
       <main class="main" transition:animate="slide">
         <slot />
       </main>
     </div>
+    <Toast />
+    <EditMemeModal />
   </body>
 </html>
 
 <script>
+  // Restore scroll position after view transitions
   document.addEventListener('astro:page-load', () => {
-    console.log('Page loaded - reinitializing scripts');
+    const savedScroll = sessionStorage.getItem('memenator-scroll');
+    if (savedScroll) {
+      sessionStorage.removeItem('memenator-scroll');
+      requestAnimationFrame(() => {
+        window.scrollTo(0, parseInt(savedScroll, 10));
+      });
+    }
   });
 </script>
 

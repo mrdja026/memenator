@@ -1,0 +1,304 @@
+openapi: 3.0.3
+info:
+  title: Memenator Meme Tags API
+  description: |
+    API endpoint for editing meme tags (add/remove).
+    
+    This API enables users to:
+    - Update tags on existing memes
+    - Add new tags to a meme
+    - Remove existing tags from a meme
+    
+    **Technical Stack:**
+    - Framework: Astro 5.0+ (SSR)
+    - Database: libSQL (SQLite-compatible)
+    - UI: Native HTML `<dialog>` element for modal
+    
+    **User Flow:**
+    1. User clicks edit (pencil) icon on meme card
+    2. Modal opens showing current meme with editable tags
+    3. User can add new tags or remove existing ones
+    4. User clicks "Save" to persist changes
+    5. Modal closes and page refreshes via view transitions
+    
+    **Design Principles (KISS/DRY):**
+    - Pure TypeScript/JavaScript - no external libraries
+    - Native `<dialog>` element - no modal libraries
+    - Reuse existing TagInput component
+    - CSS variables for consistent styling
+    
+  version: 1.0.0
+  contact:
+    name: Memenator API Support
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:4321
+    description: Local development server
+
+tags:
+  - name: Memes
+    description: Meme management operations
+
+paths:
+  /api/memes/{id}/tags:
+    put:
+      tags:
+        - Memes
+      summary: Update meme tags
+      description: |
+        Replaces all tags on a meme with the provided tag list.
+        
+        **Process Flow:**
+        1. Validates meme exists in database
+        2. Removes all existing MemeTag associations
+        3. Creates or retrieves tags by name (normalized to lowercase)
+        4. Creates new MemeTag associations
+        5. Returns updated meme with new tags
+        
+        **Tag Normalization:**
+        - Tags are trimmed of whitespace
+        - Tags are converted to lowercase
+        - Duplicate tags are ignored
+        - Empty strings are filtered out
+        
+        **Database Operations:**
+        1. DELETE FROM MemeTag WHERE memeId = ?
+        2. For each tag:
+           - SELECT FROM Tag WHERE name = ? (or INSERT if new)
+           - INSERT INTO MemeTag (memeId, tagId)
+        
+      operationId: updateMemeTags
+      
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: UUID of the meme to update
+          schema:
+            type: string
+            format: uuid
+          example: "123e4567-e89b-12d3-a456-426614174000"
+      
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - tags
+              properties:
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: |
+                    Array of tag names to set on the meme.
+                    Replaces all existing tags.
+                    Empty array removes all tags.
+                  example: ["funny", "cat", "meme"]
+            examples:
+              addTags:
+                summary: Set multiple tags
+                value:
+                  tags: ["funny", "cat", "viral"]
+              clearTags:
+                summary: Remove all tags
+                value:
+                  tags: []
+              singleTag:
+                summary: Set single tag
+                value:
+                  tags: ["reaction"]
+      
+      responses:
+        '200':
+          description: Tags successfully updated
+          content:
+            application/json:
+              schema:
+                type: object
+                required:
+                  - success
+                  - meme
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  meme:
+                    $ref: '#/components/schemas/MemeWithTags'
+              examples:
+                updated:
+                  summary: Tags updated successfully
+                  value:
+                    success: true
+                    meme:
+                      id: "123e4567-e89b-12d3-a456-426614174000"
+                      title: "Funny Cat"
+                      description: "A very funny cat meme"
+                      filePath: "memes/abc123.gif"
+                      fileType: "image"
+                      tags:
+                        - id: "tag-1"
+                          name: "funny"
+                        - id: "tag-2"
+                          name: "cat"
+                        - id: "tag-3"
+                          name: "viral"
+        
+        '400':
+          description: Invalid request body
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalidBody:
+                  summary: Invalid JSON body
+                  value:
+                    success: false
+                    error: "Invalid JSON body"
+                missingTags:
+                  summary: Missing tags field
+                  value:
+                    success: false
+                    error: "tags field is required"
+        
+        '404':
+          description: Meme not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                notFound:
+                  summary: Meme does not exist
+                  value:
+                    success: false
+                    error: "Meme not found"
+        
+        '500':
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+components:
+  schemas:
+    MemeWithTags:
+      type: object
+      required:
+        - id
+        - title
+        - filePath
+        - fileType
+        - tags
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the meme
+        title:
+          type: string
+          description: Meme title
+        description:
+          type: string
+          nullable: true
+          description: Optional meme description
+        filePath:
+          type: string
+          description: Path to file in MinIO storage
+        fileType:
+          type: string
+          enum: [image, video]
+          description: Type of media file
+        sharedUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Cached ImgBB share URL
+        giphyUrl:
+          type: string
+          format: uri
+          nullable: true
+          description: Cached Giphy share URL
+        tags:
+          type: array
+          items:
+            $ref: '#/components/schemas/Tag'
+          description: Array of tags associated with the meme
+    
+    Tag:
+      type: object
+      required:
+        - id
+        - name
+      properties:
+        id:
+          type: string
+          format: uuid
+          description: Unique identifier for the tag
+        name:
+          type: string
+          description: Tag name (lowercase, trimmed)
+    
+    Error:
+      type: object
+      required:
+        - success
+        - error
+      properties:
+        success:
+          type: boolean
+          example: false
+        error:
+          type: string
+          description: Human-readable error message
+
+---
+# Frontend Implementation Notes
+
+## Modal Component (EditMemeModal.astro)
+
+Uses native `<dialog>` element for accessibility and simplicity:
+
+```html
+<dialog id="edit-meme-modal">
+  <form method="dialog">
+    <header>
+      <h2>Edit Tags</h2>
+      <button type="button" class="close-btn">×</button>
+    </header>
+    <div class="modal-content">
+      <!-- Meme preview (readonly) -->
+      <div class="meme-preview">...</div>
+      <!-- Tag input (editable) -->
+      <div class="tag-editor">...</div>
+    </div>
+    <footer>
+      <button type="button" class="cancel-btn">Cancel</button>
+      <button type="submit" class="save-btn">Save</button>
+    </footer>
+  </form>
+</dialog>
+```
+
+## JavaScript API
+
+```typescript
+// Open modal with meme data
+window.openEditMemeModal(memeId: string): void
+
+// Modal saves via fetch() to PUT /api/memes/{id}/tags
+// On success, calls navigatePreservingScroll() for view transition
+```
+
+## Styling
+
+- Uses existing CSS variables (--color-*, --spacing-*, --radius-*)
+- Modal backdrop: rgba(0, 0, 0, 0.8)
+- Max width: 500px
+- Centered using dialog::backdrop and margin: auto

@@ -94,6 +94,24 @@ npm run db:stop
 | `MINIO_ACCESS_KEY` | MinIO access key | `minioadmin` |
 | `MINIO_SECRET_KEY` | MinIO secret key | `minioadmin` |
 | `MINIO_BUCKET` | Bucket name for media | `memenator-media` |
+| `IMGBB_API_KEY` | ImgBB API key for sharing | (optional) |
+
+## Sharing Memes
+
+Memenator supports sharing memes via [ImgBB](https://imgbb.com/), a free image hosting service.
+
+### Setup
+
+1. Get a free API key at https://api.imgbb.com/
+2. Add it to your `.env` file:
+   ```bash
+   IMGBB_API_KEY=your_api_key_here
+   ```
+3. Restart the app container (see below)
+
+### Usage
+
+Click the share button (next to delete) on any meme card. The meme will be uploaded to ImgBB and you'll get a shareable link with a copy button.
 
 ## Scripts
 

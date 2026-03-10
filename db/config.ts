@@ -7,6 +7,8 @@ const Meme = defineTable({
     description: column.text({ optional: true }),
     filePath: column.text(),
     fileType: column.text(),
+    sharedUrl: column.text({ optional: true }),
+    giphyUrl: column.text({ optional: true }),
     createdAt: column.date({ default: NOW }),
   },
 });

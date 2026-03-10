@@ -2,6 +2,7 @@ import {
   S3Client,
   PutObjectCommand,
   DeleteObjectCommand,
+  GetObjectCommand,
   HeadBucketCommand,
   CreateBucketCommand,
 } from '@aws-sdk/client-s3';
@@ -78,5 +79,29 @@ export async function validateConnection(): Promise<boolean> {
     return true;
   } catch {
     return false;
+  }
+}
+
+export async function getFileBuffer(key: string): Promise<Buffer | null> {
+  try {
+    const response = await s3Client.send(
+      new GetObjectCommand({
+        Bucket: MINIO_BUCKET,
+        Key: key,
+      })
+    );
+
+    if (!response.Body) {
+      return null;
+    }
+
+    const chunks: Uint8Array[] = [];
+    const stream = response.Body as AsyncIterable<Uint8Array>;
+    for await (const chunk of stream) {
+      chunks.push(chunk);
+    }
+    return Buffer.concat(chunks);
+  } catch {
+    return null;
   }
 }

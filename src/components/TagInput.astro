@@ -1,191 +1,67 @@
 ---
 interface Props {
+  id?: string;
   existingTags?: Array<{ id: string; name: string }>;
 }
 
-const { existingTags = [] } = Astro.props;
+const { id = 'tag', existingTags = [] } = Astro.props;
 ---
 
-<div class="tag-input-wrapper" id="tag-input-wrapper" data-existing-tags={JSON.stringify(existingTags)}>
-  <div class="selected-tags" id="selected-tags"></div>
+<div class="tag-input-wrapper" id={`${id}-input-wrapper`} data-existing-tags={JSON.stringify(existingTags)}>
+  <div class="selected-tags" id={`${id}-selected-tags`}></div>
   <div class="input-container">
     <input 
       type="text" 
       class="tag-input" 
-      id="tag-input"
+      id={`${id}-input`}
       placeholder="Add tags..."
       autocomplete="off"
     />
-    <div class="autocomplete-dropdown" id="autocomplete-dropdown" hidden></div>
+    <div class="autocomplete-dropdown" id={`${id}-dropdown`} hidden></div>
   </div>
 </div>
 
 <script>
+  import { createTagInput, type TagInputAPI } from '@/lib/tag-input';
+
   function initTagInput() {
-    const wrapper = document.getElementById('tag-input-wrapper');
-    const input = document.getElementById('tag-input') as HTMLInputElement | null;
-    const dropdown = document.getElementById('autocomplete-dropdown');
-    const selectedTagsContainer = document.getElementById('selected-tags');
+    document.querySelectorAll('.tag-input-wrapper').forEach((wrapper) => {
+      if ((wrapper as any)._tagInputApi) return;
 
-    if (!wrapper || !input || !dropdown || !selectedTagsContainer) return;
+      const id = wrapper.id.replace('-input-wrapper', '');
+      const input = document.getElementById(`${id}-input`) as HTMLInputElement;
+      const dropdown = document.getElementById(`${id}-dropdown`) as HTMLElement;
+      const tagsContainer = document.getElementById(`${id}-selected-tags`) as HTMLElement;
 
-    // Prevent duplicate initialization
-    if ((wrapper as any)._initialized) return;
-    (wrapper as any)._initialized = true;
+      if (!input || !dropdown || !tagsContainer) return;
 
-    let allTags: Array<{ id: string; name: string }> = [];
-    let selectedTags: string[] = [];
-
-    // Load existing tags
-    try {
-      allTags = JSON.parse(wrapper.dataset.existingTags || '[]');
-    } catch {
-      allTags = [];
-    }
-
-    // Fetch tags from API
-    async function fetchTags() {
-      try {
-        const response = await fetch('/api/tags');
-        const data = await response.json();
-        allTags = data.tags || [];
-      } catch {
-        console.error('Failed to fetch tags');
-      }
-    }
-    fetchTags();
-
-    function renderSelectedTags() {
-      selectedTagsContainer.innerHTML = selectedTags.map(tag => `
-        <span class="tag-pill removable" data-tag="${tag}">
-          ${tag}
-          <button type="button" class="remove-btn" aria-label="Remove ${tag}">
-            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="2">
-              <line x1="2" y1="2" x2="10" y2="10" />
-              <line x1="10" y1="2" x2="2" y2="10" />
-            </svg>
-          </button>
-        </span>
-      `).join('');
-
-      // Add remove handlers
-      selectedTagsContainer.querySelectorAll('.remove-btn').forEach(btn => {
-        btn.addEventListener('click', (e) => {
-          e.preventDefault();
-          e.stopPropagation();
-          const pill = (e.currentTarget as HTMLElement).closest('.tag-pill');
-          const tag = pill?.getAttribute('data-tag');
-          if (tag) removeTag(tag);
-        });
-      });
-
-      dispatchChange();
-    }
-
-    function addTag(name: string) {
-      const normalized = name.toLowerCase().trim();
-      if (!normalized || selectedTags.includes(normalized)) {
-        if (selectedTags.includes(normalized)) {
-          const pill = selectedTagsContainer.querySelector(`[data-tag="${normalized}"]`);
-          pill?.classList.add('shake');
-          setTimeout(() => pill?.classList.remove('shake'), 300);
+      const api = createTagInput({
+        wrapper: wrapper as HTMLElement,
+        input,
+        dropdown,
+        tagsContainer,
+        onTagsChange: (tags) => {
+          wrapper.dispatchEvent(new CustomEvent('tagschange', {
+            detail: { tags },
+            bubbles: true
+          }));
         }
-        return;
-      }
-      selectedTags.push(normalized);
-      renderSelectedTags();
-      input.value = '';
-      hideDropdown();
-    }
-
-    function removeTag(name: string) {
-      selectedTags = selectedTags.filter(t => t !== name);
-      renderSelectedTags();
-    }
-
-    function showDropdown(filter: string) {
-      const matches = allTags
-        .filter(t => t.name.includes(filter.toLowerCase()) && !selectedTags.includes(t.name))
-        .slice(0, 5);
-
-      if (matches.length === 0 && filter.trim()) {
-        dropdown.innerHTML = `<div class="dropdown-item create" data-value="${filter.trim()}">Create "${filter.trim()}"</div>`;
-      } else if (matches.length === 0) {
-        hideDropdown();
-        return;
-      } else {
-        dropdown.innerHTML = matches.map(t => 
-          `<div class="dropdown-item" data-value="${t.name}">${t.name}</div>`
-        ).join('');
-      }
-
-      dropdown.hidden = false;
-
-      dropdown.querySelectorAll('.dropdown-item').forEach(item => {
-        item.addEventListener('click', () => {
-          const value = item.getAttribute('data-value');
-          if (value) addTag(value);
-        });
       });
-    }
 
-    function hideDropdown() {
-      dropdown.hidden = true;
-      dropdown.innerHTML = '';
-    }
-
-    function dispatchChange() {
-      wrapper.dispatchEvent(new CustomEvent('tagschange', {
-        detail: { tags: [...selectedTags] },
-        bubbles: true
-      }));
-    }
-
-    // Input handlers
-    input.addEventListener('input', () => {
-      const value = input.value;
-      if (value.includes(',')) {
-        const tag = value.replace(',', '').trim();
-        if (tag) addTag(tag);
-      } else if (value) {
-        showDropdown(value);
-      } else {
-        hideDropdown();
-      }
+      // Expose API on element
+      (wrapper as any)._tagInputApi = api;
+      (wrapper as any).getTags = api.getTags;
+      (wrapper as any).setTags = api.setTags;
+      (wrapper as any).clearTags = api.clearTags;
     });
-
-    input.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') {
-        e.preventDefault();
-        const value = input.value.trim();
-        if (value) addTag(value);
-      } else if (e.key === 'Escape') {
-        hideDropdown();
-      } else if (e.key === 'Backspace' && !input.value && selectedTags.length > 0) {
-        removeTag(selectedTags[selectedTags.length - 1]);
-      }
-    });
-
-    input.addEventListener('blur', () => {
-      setTimeout(hideDropdown, 150);
-    });
-
-    // Expose methods
-    (wrapper as any).getTags = () => [...selectedTags];
-    (wrapper as any).clearTags = () => {
-      selectedTags = [];
-      renderSelectedTags();
-    };
   }
 
-  // Run on initial load
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initTagInput);
   } else {
     initTagInput();
   }
   
-  // Run on view transitions
   document.addEventListener('astro:page-load', initTagInput);
 </script>
 
@@ -240,26 +116,26 @@ const { existingTags = [] } = Astro.props;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     margin-top: var(--spacing-xs);
-    z-index: 10;
+    z-index: 100;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
   }
 
-  .dropdown-item {
+  .tag-input-wrapper :global(.dropdown-item) {
     padding: var(--spacing-sm) var(--spacing-md);
     cursor: pointer;
     font-size: 0.875rem;
     transition: background 0.1s ease;
   }
 
-  .dropdown-item:hover {
+  .tag-input-wrapper :global(.dropdown-item:hover) {
     background: var(--color-surface-hover);
   }
 
-  .dropdown-item.create {
+  .tag-input-wrapper :global(.dropdown-item.create) {
     color: var(--color-accent);
   }
 
-  .tag-pill {
+  .tag-input-wrapper :global(.tag-pill) {
     display: inline-flex;
     align-items: center;
     gap: var(--spacing-xs);
@@ -271,11 +147,11 @@ const { existingTags = [] } = Astro.props;
     color: var(--color-text);
   }
 
-  .tag-pill.removable {
+  .tag-input-wrapper :global(.tag-pill.removable) {
     padding-right: var(--spacing-xs);
   }
 
-  .tag-pill.shake {
+  .tag-input-wrapper :global(.tag-pill.shake) {
     animation: shake 0.3s ease;
   }
 
@@ -285,7 +161,7 @@ const { existingTags = [] } = Astro.props;
     75% { transform: translateX(4px); }
   }
 
-  .remove-btn {
+  .tag-input-wrapper :global(.remove-btn) {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -300,7 +176,7 @@ const { existingTags = [] } = Astro.props;
     transition: all 0.15s ease;
   }
 
-  .remove-btn:hover {
+  .tag-input-wrapper :global(.remove-btn:hover) {
     background: var(--color-error);
     color: white;
   }
