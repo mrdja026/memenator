@@ -5,8 +5,6 @@ import {
   HeadBucketCommand,
   CreateBucketCommand,
 } from '@aws-sdk/client-s3';
-import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
 
 const MINIO_ENDPOINT = process.env.MINIO_ENDPOINT || 'http://localhost:9000';
 const MINIO_ACCESS_KEY = process.env.MINIO_ACCESS_KEY || 'minioadmin';
@@ -57,15 +55,8 @@ export async function uploadFile(
   return key;
 }
 
-export async function getPresignedUrl(
-  key: string,
-  expiresIn: number = 86400
-): Promise<string> {
-  const command = new GetObjectCommand({
-    Bucket: MINIO_BUCKET,
-    Key: key,
-  });
-  return getSignedUrl(s3Client, command, { expiresIn });
+export async function getPresignedUrl(key: string): Promise<string> {
+  return `/api/media/${key}`;
 }
 
 export async function deleteFile(key: string): Promise<void> {

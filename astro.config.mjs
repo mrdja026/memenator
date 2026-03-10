@@ -8,4 +8,10 @@ export default defineConfig({
   adapter: node({
     mode: 'standalone',
   }),
+  server: {
+    host: true,
+  },
+  security: {
+    checkOrigin: false,
+  },
 });
